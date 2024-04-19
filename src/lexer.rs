@@ -16,7 +16,6 @@ pub enum TokenType {
     X = 106,
     P = 107,
 
-
     // Identifiers : Alphanumerics
     IDENT = 7,
 
@@ -129,7 +128,7 @@ impl Lexer {
     }
 
     pub fn abort(&self, message: &str) {
-        panic!("Lexing error. {}", message);
+        panic!("Lexical Error: {}", message); // Use {} directly for the message
     }
 
     fn skip_whitespace(&mut self) {
