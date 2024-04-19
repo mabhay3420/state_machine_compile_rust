@@ -13,7 +13,9 @@ pub enum TokenType {
     // Contextual Keywords
     R = 104,
     L = 105,
-    P = 106,
+    X = 106,
+    P = 107,
+
 
     // Identifiers : Alphanumerics
     IDENT = 7,
@@ -42,6 +44,7 @@ impl FromStr for TokenType {
             "R" => Ok(TokenType::R),
             "L" => Ok(TokenType::L),
             "P" => Ok(TokenType::P),
+            "X" => Ok(TokenType::X),
             "IDENT" => Ok(TokenType::IDENT),
             "OR" => Ok(TokenType::OR),
             "LEFT_BRACKET" => Ok(TokenType::LEFT_BRACKET),
@@ -57,7 +60,7 @@ impl FromStr for TokenType {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Token {
     pub text: String,
     pub kind: TokenType,
@@ -79,6 +82,7 @@ impl Token {
     }
 }
 
+#[derive(Debug, PartialEq, Clone)]
 pub struct Lexer {
     source: Vec<char>,
     pub cur_char: char,

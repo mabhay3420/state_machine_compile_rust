@@ -261,7 +261,7 @@ fn test_keywords_and_identifiers() {
         },
         Token {
             text: "X".to_string(),
-            kind: TokenType::IDENT,
+            kind: TokenType::X,
         },
         Token {
             text: ",".to_string(),
@@ -341,7 +341,7 @@ fn test_keywords_and_identifiers() {
         },
         Token {
             text: "X".to_string(),
-            kind: TokenType::IDENT,
+            kind: TokenType::X,
         },
         Token {
             text: ")".to_string(),
