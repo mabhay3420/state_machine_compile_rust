@@ -96,3 +96,79 @@ fn test_invalid_action() {
     parser.program();
     println!("Parsing Completed");
 }
+
+#[test]
+#[should_panic(expected = "Parsing error: State A already defined.")]
+fn test_duplicate_state_identifiers() {
+    let code = "
+    STATES: A, [B], A, C
+
+    SYMBOLS: 0, 1, B
+
+    TRANSITIONS:
+    B, 0 | 1, R-L-L-P(X)-L, C
+    C, * , L , A
+    ";
+
+    let lexer = Lexer::new(code);
+    let mut parser = Parser::new(lexer);
+    parser.program();
+    println!("Parsing Completed");
+}
+
+#[test]
+#[should_panic(expected = "Parsing error: Symbol 0 already defined.")]
+fn test_duplicate_symbol_identifiers() {
+    let code = "
+    STATES: [A], B, C
+
+    SYMBOLS: 0, 1, 0
+
+    TRANSITIONS:
+    A, 0 | 1, R-L-L-P(X)-L, B
+    B, * , L , C
+    ";
+
+    let lexer = Lexer::new(code);
+    let mut parser = Parser::new(lexer);
+    parser.program();
+    println!("Parsing Completed");
+}
+
+#[test]
+#[should_panic(expected = "Parsing error: Expected IDENT, got COMMA")]
+fn test_invalid_transition_condition() {
+    let code = "
+    STATES: [A], B, C
+
+    SYMBOLS: 0, 1
+
+    TRANSITIONS:
+    A, 0 | , R-L-L-P(X)-L, B
+    B, * , L , C
+    ";
+
+    let lexer = Lexer::new(code);
+    let mut parser = Parser::new(lexer);
+    parser.program();
+    println!("Parsing Completed");
+}
+
+#[test]
+#[should_panic(expected = "Parsing error: Symbol Y not defined, So cannot be printed.")]
+fn test_invalid_print_symbol() {
+    let code = "
+    STATES: [A], B, C
+
+    SYMBOLS: 0, 1
+
+    TRANSITIONS:
+    A, 0 | 1, R-L-L-P(Y)-L, B
+    B, * , L , C
+    ";
+
+    let lexer = Lexer::new(code);
+    let mut parser = Parser::new(lexer);
+    parser.program();
+    println!("Parsing Completed");
+}
