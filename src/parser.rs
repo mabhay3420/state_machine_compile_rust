@@ -401,19 +401,39 @@ impl Parser {
     // Parse a list of transition conditions: IDENT ('|' IDENT)*
     fn transition_condition_list(&mut self) {
         let mut conditions: Vec<String> = Vec::new();
-        self.consume(
-            TokenType::IDENT,
+
+        // Consume X as well
+        if self.try_consume(
+            TokenType::X,
             Some(|token: &Token| {
                 conditions.push(token.text.clone());
             }),
-        );
-        while self.try_consume(TokenType::OR, None::<fn(&Token)>) {
+        ) {
+        } else {
             self.consume(
                 TokenType::IDENT,
                 Some(|token: &Token| {
                     conditions.push(token.text.clone());
                 }),
             );
+        }
+
+        while self.try_consume(TokenType::OR, None::<fn(&Token)>) {
+            // Consume X as well
+            if self.try_consume(
+                TokenType::X,
+                Some(|token: &Token| {
+                    conditions.push(token.text.clone());
+                }),
+            ) {
+            } else {
+                self.consume(
+                    TokenType::IDENT,
+                    Some(|token: &Token| {
+                        conditions.push(token.text.clone());
+                    }),
+                );
+            }
         }
         self.tree.transitions.last_mut().unwrap().condition = Condition::OR(conditions);
         println!("TRANSITION_CONDITION_LIST");
