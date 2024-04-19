@@ -50,7 +50,7 @@ fn test_get_token() {
 #[test]
 #[should_panic(expected = "Lexical Error: Unknown token: !")]
 fn test_invalid_token() {
-    let code = "[!]";
+    let code = "[]";
     let mut lexer = Lexer::new(code);
     while let Some(token) = lexer.get_token() {
         println!("{:?}", token);
