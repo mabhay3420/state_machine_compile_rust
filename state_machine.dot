@@ -4,14 +4,14 @@ digraph {
   "q" [shape=circle];
   "p" [shape=circle];
   "f" [shape=circle];
-  "b" -> "o" [label="* / L"];
-  "o" -> "o" [label="[1] / L"];
+  "b" -> "o" [label="* / P(e)-R-P(e)-R-P(0)-R-R-P(0)-L-L"];
+  "o" -> "o" [label="[1] / R-P(x)-L-L-L"];
   "o" -> "q" [label="[0] / X"];
-  "q" -> "q" [label="[0,1] / R"];
-  "q" -> "p" [label="[X] / L"];
-  "p" -> "q" [label="[x] / R"];
+  "q" -> "q" [label="[0,1] / R-R"];
+  "q" -> "p" [label="[X] / P(1)-L"];
+  "p" -> "q" [label="[x] / P(X)-R"];
   "p" -> "f" [label="[e] / R"];
-  "p" -> "p" [label="[X] / L"];
-  "f" -> "f" [label="* / R"];
-  "f" -> "o" [label="[X] / L"];
+  "p" -> "p" [label="[X] / L-L"];
+  "f" -> "f" [label="* / R-R"];
+  "f" -> "o" [label="[X] / P(0)-L-L"];
 }

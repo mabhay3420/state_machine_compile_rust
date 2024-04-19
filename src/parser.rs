@@ -57,6 +57,161 @@ pub struct ParseTree {
     pub transitions: Vec<Transition>,
 }
 
+impl ParseTree {
+    pub fn to_rust_code(&self) -> String {
+        let mut code = String::new();
+
+        // Generate the TapeMachineState enum
+        code.push_str(
+            "use std::fmt;\nuse std::io;\n\n#[derive(Debug, PartialEq, Eq)]\nenum TapeMachineState {\n",
+        );
+        for state in &self.states {
+            code.push_str(&format!("    {},\n", state));
+        }
+        code.push_str("}\n\n");
+
+        // Generate the TapeMachineSymbol enum
+        code.push_str("#[derive(Debug, PartialEq, Eq, Clone)]\nenum TapeMachineSymbol {\n");
+        for symbol in &self.symbols {
+            code.push_str(&format!("    Symbol{},\n", symbol));
+        }
+        code.push_str("}\n\n");
+
+        // Generate the TapeMachineSymbol implementation
+        code.push_str("impl TapeMachineSymbol {\n");
+        code.push_str("    fn as_str(&self) -> &'static str {\n");
+        code.push_str("        match self {\n");
+        code.push_str(
+            &self
+                .symbols
+                .iter()
+                .map(|symbol| 
+                     format!("            TapeMachineSymbol::Symbol{} => \"{}\"", symbol, symbol)
+                )
+                .collect::<Vec<String>>()
+                .join(",\n"),
+        );
+        code.push_str("\n        }\n");
+        code.push_str("    }\n");
+        code.push_str("}\n\n");
+
+        // Generate the TapeMachine struct
+        code.push_str("struct TapeMachine<'a> {\n    state: &'a TapeMachineState,\n    result: &'a mut Vec<TapeMachineSymbol>,\n    index: usize,\n}\n\n");
+
+        // Generate the TapeMachine implementation
+        code.push_str("impl<'a> TapeMachine<'a> {\n");
+        code.push_str("    pub fn new(state: &'a TapeMachineState, result: &'a mut Vec<TapeMachineSymbol>) -> Self {\n");
+        code.push_str("        Self {\n");
+        code.push_str("            state,\n");
+        code.push_str("            result,\n");
+        code.push_str("            index: 0,\n");
+        code.push_str("        }\n");
+        code.push_str("    }\n\n");
+
+        code.push_str("    fn p(&mut self, symbol: TapeMachineSymbol) {\n");
+        code.push_str("        self.result[self.index] = symbol;\n");
+        code.push_str("    }\n\n");
+
+        code.push_str("    fn r(&mut self) {\n");
+        code.push_str("        self.index += 1;\n");
+        code.push_str("    }\n\n");
+
+        code.push_str("    fn l(&mut self) {\n");
+        code.push_str("        self.index -= 1;\n");
+        code.push_str("    }\n");
+
+        code.push_str("}\n\n");
+
+        // Generate the main function
+        code.push_str("fn main() {\n");
+        code.push_str("    println!(\"Enter the number of steps:\");\n");
+        code.push_str("    let mut steps_input = String::new();\n");
+        code.push_str("    io::stdin().read_line(&mut steps_input).unwrap();\n");
+        code.push_str("    let steps: usize = steps_input.trim().parse().unwrap();\n\n");
+
+        code.push_str("    println!(\"Enter the total tape length:\");\n");
+        code.push_str("    let mut tape_length_input = String::new();\n");
+        code.push_str("    io::stdin().read_line(&mut tape_length_input).unwrap();\n");
+        code.push_str("    let max_len: usize = tape_length_input.trim().parse().unwrap();\n\n");
+        code.push_str("    let mut result = vec![TapeMachineSymbol::SymbolX; max_len];\n");
+        code.push_str(&format!(
+            "    let mut tape_machine = TapeMachine::new(&TapeMachineState::{}, &mut result);\n\n",
+            self.initial_state
+        ));
+
+        code.push_str("    for i in 0..steps {\n");
+        code.push_str("        println!(\"Step: {} State: {:?} Symbol: {:?}\",\n");
+        code.push_str(
+            "            i, tape_machine.state, tape_machine.result[tape_machine.index]);\n\n",
+        );
+
+        code.push_str(
+            "        match (tape_machine.state, &tape_machine.result[tape_machine.index]) {\n",
+        );
+
+        for transition in &self.transitions {
+            let condition = match &transition.condition {
+                Condition::OR(symbols) => {
+                    let mut condition_str = String::new();
+                    for (i, symbol) in symbols.iter().enumerate() {
+                        condition_str.push_str(&format!("TapeMachineSymbol::Symbol{}", symbol));
+                        if i < symbols.len() - 1 {
+                            condition_str.push_str(" | ");
+                        }
+                    }
+                    condition_str
+                }
+                Condition::Star => "_".to_string(),
+            };
+
+            code.push_str(&format!(
+                "            (TapeMachineState::{}, {}) => {{\n",
+                transition.initial_state, condition
+            ));
+
+            for step in &transition.steps {
+                match step {
+                    TransitionStep::R => code.push_str("                tape_machine.r();\n"),
+                    TransitionStep::L => code.push_str("                tape_machine.l();\n"),
+                    TransitionStep::X => {
+                        code.push_str("                // X means do nothing\n");
+                    }
+                    TransitionStep::P(symbol) => {
+                        code.push_str(&format!(
+                            "                tape_machine.p(TapeMachineSymbol::Symbol{});\n",
+                            symbol
+                        ));
+                    }
+                }
+            }
+
+            code.push_str(&format!(
+                "                tape_machine.state = &TapeMachineState::{};\n",
+                transition.final_state
+            ));
+            code.push_str(&format!(
+                "                println!(\"Final State: {{:?}}\", TapeMachineState::{});\n",
+                transition.final_state
+            ));
+            code.push_str("            }\n");
+        }
+
+        code.push_str("            (_, _) => {\n");
+        code.push_str("                println!(\"State: {:?} Index: {:?} Symbol: {:?}\", tape_machine.state, tape_machine.index, tape_machine.result[tape_machine.index]);\n");
+        code.push_str("                let binary_result: String = tape_machine.result.iter().map(|x| x.as_str()).collect();\n");
+        code.push_str("                println!(\"{}\", binary_result);\n");
+        code.push_str("                panic!(\"Invalid state reached\");\n");
+        code.push_str("            }\n");
+        code.push_str("        }\n");
+        code.push_str("    }\n\n");
+
+        code.push_str("    let binary_result: String = tape_machine.result.iter().map(|x| x.as_str()).collect();\n");
+        code.push_str("    println!(\"{}\", binary_result);\n");
+        code.push_str("}\n");
+
+        code
+    }
+}
 pub trait ToDot {
     fn to_dot(&self) -> String;
 }
@@ -313,32 +468,24 @@ impl Parser {
 
     // Parse a transition step: R | L | P '(' IDENT ')' | X
     fn transition_step(&mut self) {
-        let mut steps: Vec<TransitionStep> = Vec::new();
+        // By default, do nothing
+        let mut step: TransitionStep = TransitionStep::X;
         if self.try_consume(
             TokenType::R,
             Some(|token: &Token| {
-                steps.push(FromTokenAndValue::from_token_and_value(
-                    &token.clone(),
-                    None,
-                ));
+                step = FromTokenAndValue::from_token_and_value(&token.clone(), None);
             }),
         ) {
         } else if self.try_consume(
             TokenType::L,
             Some(|token: &Token| {
-                steps.push(FromTokenAndValue::from_token_and_value(
-                    &token.clone(),
-                    None,
-                ));
+                step = FromTokenAndValue::from_token_and_value(&token.clone(), None);
             }),
         ) {
         } else if self.try_consume(
             TokenType::X,
             Some(|token: &Token| {
-                steps.push(FromTokenAndValue::from_token_and_value(
-                    &token.clone(),
-                    None,
-                ));
+                step = FromTokenAndValue::from_token_and_value(&token.clone(), None);
             }),
         ) {
         } else if self.try_consume(TokenType::P, None::<fn(&Token)>) {
@@ -366,13 +513,13 @@ impl Parser {
                     print_string
                 ));
             }
-            steps.push(FromTokenAndValue::from_token_and_value(
+            step = FromTokenAndValue::from_token_and_value(
                 &Token {
                     text: "P".to_string(),
                     kind: TokenType::P,
                 },
                 Some(print_string),
-            ));
+            );
 
             self.consume(TokenType::RIGHT_PAREN, None::<fn(&Token)>);
         } else {
@@ -386,7 +533,7 @@ impl Parser {
                 self.cur_token.text
             ));
         }
-        self.tree.transitions.last_mut().unwrap().steps = steps;
+        self.tree.transitions.last_mut().unwrap().steps.push(step);
     }
 
     // Parse a list of transition steps: transition_step ('-' transition_step)*
