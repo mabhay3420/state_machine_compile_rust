@@ -85,9 +85,12 @@ impl ParseTree {
             &self
                 .symbols
                 .iter()
-                .map(|symbol| 
-                     format!("            TapeMachineSymbol::Symbol{} => \"{}\"", symbol, symbol)
-                )
+                .map(|symbol| {
+                    format!(
+                        "            TapeMachineSymbol::Symbol{} => \"{}\"",
+                        symbol, symbol
+                    )
+                })
                 .collect::<Vec<String>>()
                 .join(",\n"),
         );
