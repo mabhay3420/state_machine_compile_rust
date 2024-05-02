@@ -152,7 +152,19 @@ impl ParseTree {
             "        match (tape_machine.state, &tape_machine.result[tape_machine.index]) {\n",
         );
 
-        for transition in &self.transitions {
+        // Sort transitions so that the ones with star condition are executed last
+        // This is to ensure compatibility with switch statements
+        let mut sorted_transitions = self.transitions.clone();
+        sorted_transitions.sort_by(|a, b| {
+            if a.condition == Condition::Star {
+                std::cmp::Ordering::Greater
+            } else if b.condition == Condition::Star {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        });
+        for transition in sorted_transitions {
             let condition = match &transition.condition {
                 Condition::OR(symbols) => {
                     let mut condition_str = String::new();
@@ -210,6 +222,9 @@ impl ParseTree {
 
         code.push_str("    let binary_result: String = tape_machine.result.iter().map(|x| x.as_str()).collect();\n");
         code.push_str("    println!(\"{}\", binary_result);\n");
+        code.push_str("    let clean_result: String = tape_machine.result.iter().filter( |&x| x != &TapeMachineSymbol::SymbolX).map(|x| x.as_str()).collect();\n");
+        code.push_str("    println!(\"=========\\n\");\n");
+        code.push_str("    println!(\"{}\", clean_result);\n");
         code.push_str("}\n");
 
         code

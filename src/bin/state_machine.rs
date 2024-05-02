@@ -26,7 +26,7 @@ impl TapeMachineSymbol {
             TapeMachineSymbol::Symbol1 => "1",
             TapeMachineSymbol::Symbole => "e",
             TapeMachineSymbol::Symbolx => "x",
-            TapeMachineSymbol::SymbolX => "X"
+            TapeMachineSymbol::SymbolX => "X",
         }
     }
 }
@@ -74,24 +74,12 @@ fn main() {
     let mut tape_machine = TapeMachine::new(&TapeMachineState::b, &mut result);
 
     for i in 0..steps {
-        println!("Step: {} State: {:?} Symbol: {:?}",
-            i, tape_machine.state, tape_machine.result[tape_machine.index]);
+        println!(
+            "Step: {} State: {:?} Symbol: {:?}",
+            i, tape_machine.state, tape_machine.result[tape_machine.index]
+        );
 
         match (tape_machine.state, &tape_machine.result[tape_machine.index]) {
-            (TapeMachineState::b, _) => {
-                tape_machine.p(TapeMachineSymbol::Symbole);
-                tape_machine.r();
-                tape_machine.p(TapeMachineSymbol::Symbole);
-                tape_machine.r();
-                tape_machine.p(TapeMachineSymbol::Symbol0);
-                tape_machine.r();
-                tape_machine.r();
-                tape_machine.p(TapeMachineSymbol::Symbol0);
-                tape_machine.l();
-                tape_machine.l();
-                tape_machine.state = &TapeMachineState::o;
-                println!("Final State: {:?}", TapeMachineState::o);
-            }
             (TapeMachineState::o, TapeMachineSymbol::Symbol1) => {
                 tape_machine.r();
                 tape_machine.p(TapeMachineSymbol::Symbolx);
@@ -135,12 +123,6 @@ fn main() {
                 tape_machine.state = &TapeMachineState::p;
                 println!("Final State: {:?}", TapeMachineState::p);
             }
-            (TapeMachineState::f, _) => {
-                tape_machine.r();
-                tape_machine.r();
-                tape_machine.state = &TapeMachineState::f;
-                println!("Final State: {:?}", TapeMachineState::f);
-            }
             (TapeMachineState::f, TapeMachineSymbol::SymbolX) => {
                 tape_machine.p(TapeMachineSymbol::Symbol0);
                 tape_machine.l();
@@ -148,9 +130,33 @@ fn main() {
                 tape_machine.state = &TapeMachineState::o;
                 println!("Final State: {:?}", TapeMachineState::o);
             }
+            (TapeMachineState::b, _) => {
+                tape_machine.p(TapeMachineSymbol::Symbole);
+                tape_machine.r();
+                tape_machine.p(TapeMachineSymbol::Symbole);
+                tape_machine.r();
+                tape_machine.p(TapeMachineSymbol::Symbol0);
+                tape_machine.r();
+                tape_machine.r();
+                tape_machine.p(TapeMachineSymbol::Symbol0);
+                tape_machine.l();
+                tape_machine.l();
+                tape_machine.state = &TapeMachineState::o;
+                println!("Final State: {:?}", TapeMachineState::o);
+            }
+            (TapeMachineState::f, _) => {
+                tape_machine.r();
+                tape_machine.r();
+                tape_machine.state = &TapeMachineState::f;
+                println!("Final State: {:?}", TapeMachineState::f);
+            }
             (_, _) => {
-                println!("State: {:?} Index: {:?} Symbol: {:?}", tape_machine.state, tape_machine.index, tape_machine.result[tape_machine.index]);
-                let binary_result: String = tape_machine.result.iter().map(|x| x.as_str()).collect();
+                println!(
+                    "State: {:?} Index: {:?} Symbol: {:?}",
+                    tape_machine.state, tape_machine.index, tape_machine.result[tape_machine.index]
+                );
+                let binary_result: String =
+                    tape_machine.result.iter().map(|x| x.as_str()).collect();
                 println!("{}", binary_result);
                 panic!("Invalid state reached");
             }
@@ -159,4 +165,12 @@ fn main() {
 
     let binary_result: String = tape_machine.result.iter().map(|x| x.as_str()).collect();
     println!("{}", binary_result);
+    let clean_result: String = tape_machine
+        .result
+        .iter()
+        .filter(|&x| x != &TapeMachineSymbol::SymbolX)
+        .map(|x| x.as_str())
+        .collect();
+    println!("=========\n");
+    println!("{}", clean_result);
 }
