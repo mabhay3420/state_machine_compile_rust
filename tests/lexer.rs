@@ -18,11 +18,11 @@ fn test_get_token() {
     let expected = vec![
         Token {
             text: "[".to_string(),
-            kind: TokenType::LEFT_BRACKET,
+            kind: TokenType::LeftBracket,
         },
         Token {
             text: "]".to_string(),
-            kind: TokenType::RIGHT_BRACKET,
+            kind: TokenType::RightBracket,
         },
         Token {
             text: ",".to_string(),
@@ -66,11 +66,11 @@ fn test_whitespace_token() {
     let expected = vec![
         Token {
             text: "[".to_string(),
-            kind: TokenType::LEFT_BRACKET,
+            kind: TokenType::LeftBracket,
         },
         Token {
             text: "]".to_string(),
-            kind: TokenType::RIGHT_BRACKET,
+            kind: TokenType::RightBracket,
         },
         Token {
             text: "\n".to_string(),
@@ -94,7 +94,7 @@ fn test_more_tokens() {
     let expected = vec![
         Token {
             text: "[".to_string(),
-            kind: TokenType::LEFT_BRACKET,
+            kind: TokenType::LeftBracket,
         },
         Token {
             text: "*".to_string(),
@@ -102,7 +102,7 @@ fn test_more_tokens() {
         },
         Token {
             text: "]".to_string(),
-            kind: TokenType::RIGHT_BRACKET,
+            kind: TokenType::RightBracket,
         },
         Token {
             text: ",".to_string(),
@@ -142,11 +142,11 @@ fn test_comments() {
     let expected = vec![
         Token {
             text: "[".to_string(),
-            kind: TokenType::LEFT_BRACKET,
+            kind: TokenType::LeftBracket,
         },
         Token {
             text: "]".to_string(),
-            kind: TokenType::RIGHT_BRACKET,
+            kind: TokenType::RightBracket,
         },
         Token {
             text: "\n".to_string(),
@@ -202,7 +202,7 @@ fn test_keywords_and_identifiers() {
         },
         Token {
             text: "[".to_string(),
-            kind: TokenType::LEFT_BRACKET,
+            kind: TokenType::LeftBracket,
         },
         Token {
             text: "A".to_string(),
@@ -210,7 +210,7 @@ fn test_keywords_and_identifiers() {
         },
         Token {
             text: "]".to_string(),
-            kind: TokenType::RIGHT_BRACKET,
+            kind: TokenType::RightBracket,
         },
         Token {
             text: ",".to_string(),
@@ -242,7 +242,7 @@ fn test_keywords_and_identifiers() {
         },
         Token {
             text: "[".to_string(),
-            kind: TokenType::LEFT_BRACKET,
+            kind: TokenType::LeftBracket,
         },
         Token {
             text: "0".to_string(),
@@ -274,7 +274,7 @@ fn test_keywords_and_identifiers() {
         },
         Token {
             text: "]".to_string(),
-            kind: TokenType::RIGHT_BRACKET,
+            kind: TokenType::RightBracket,
         },
         Token {
             text: "\n".to_string(),
@@ -290,7 +290,7 @@ fn test_keywords_and_identifiers() {
         },
         Token {
             text: "[".to_string(),
-            kind: TokenType::LEFT_BRACKET,
+            kind: TokenType::LeftBracket,
         },
         Token {
             text: "A".to_string(),
@@ -338,7 +338,7 @@ fn test_keywords_and_identifiers() {
         },
         Token {
             text: "(".to_string(),
-            kind: TokenType::LEFT_PAREN,
+            kind: TokenType::LeftParen,
         },
         Token {
             text: "X".to_string(),
@@ -346,7 +346,7 @@ fn test_keywords_and_identifiers() {
         },
         Token {
             text: ")".to_string(),
-            kind: TokenType::RIGHT_PAREN,
+            kind: TokenType::RightParen,
         },
         Token {
             text: ",".to_string(),
@@ -358,7 +358,7 @@ fn test_keywords_and_identifiers() {
         },
         Token {
             text: "]".to_string(),
-            kind: TokenType::RIGHT_BRACKET,
+            kind: TokenType::RightBracket,
         },
         Token {
             text: ",".to_string(),
@@ -366,7 +366,7 @@ fn test_keywords_and_identifiers() {
         },
         Token {
             text: "[".to_string(),
-            kind: TokenType::LEFT_BRACKET,
+            kind: TokenType::LeftBracket,
         },
         Token {
             text: "B".to_string(),
@@ -398,7 +398,7 @@ fn test_keywords_and_identifiers() {
         },
         Token {
             text: "]".to_string(),
-            kind: TokenType::RIGHT_BRACKET,
+            kind: TokenType::RightBracket,
         },
         Token {
             text: "\n".to_string(),

@@ -365,7 +365,7 @@ impl Parser {
 
     // Parse an initial state identifier: [IDENT]
     fn initial_state_identifier(&mut self) {
-        self.consume(TokenType::LEFT_BRACKET, None::<fn(&Token)>);
+        self.consume(TokenType::LeftBracket, None::<fn(&Token)>);
         let mut initial_state = String::new();
         self.consume(
             TokenType::IDENT,
@@ -379,7 +379,7 @@ impl Parser {
         } else {
             self.abort("Initial state already defined.");
         }
-        self.consume(TokenType::RIGHT_BRACKET, None::<fn(&Token)>);
+        self.consume(TokenType::RightBracket, None::<fn(&Token)>);
         println!("INITIAL_STATE_IDENTIFIER");
     }
 
@@ -388,8 +388,8 @@ impl Parser {
         let mut state_identifiers = Vec::new();
 
         // Consume all tokens
-        while self.check_token(TokenType::IDENT) || self.check_token(TokenType::LEFT_BRACKET) {
-            if self.check_token(TokenType::LEFT_BRACKET) {
+        while self.check_token(TokenType::IDENT) || self.check_token(TokenType::LeftBracket) {
+            if self.check_token(TokenType::LeftBracket) {
                 self.initial_state_identifier();
             } else if !self.try_consume(
                 TokenType::IDENT,
@@ -492,7 +492,7 @@ impl Parser {
             }),
         ) {
         } else if self.try_consume(TokenType::P, None::<fn(&Token)>) {
-            self.consume(TokenType::LEFT_PAREN, None::<fn(&Token)>);
+            self.consume(TokenType::LeftParen, None::<fn(&Token)>);
             let mut print_string = String::new();
             // Either X or a symbol identifier
             if self.try_consume(
@@ -524,7 +524,7 @@ impl Parser {
                 Some(print_string),
             );
 
-            self.consume(TokenType::RIGHT_PAREN, None::<fn(&Token)>);
+            self.consume(TokenType::RightParen, None::<fn(&Token)>);
         } else {
             self.abort(&format!(
                 "Expected {:?} or {:?} or {:?} or {:?} as an action step, got {:?}: {:?}",

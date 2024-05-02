@@ -41,7 +41,7 @@ Output:
 
 1. `src/bin/state_machine.rs`
 
-   Run the Rust code: `cargo run --bin state_machine`
+   To test the the generated Rust code: `cargo run --bin state_machine`
 
    Inputs:
    - `num_steps` - The number of steps to run the state machine.

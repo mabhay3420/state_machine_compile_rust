@@ -21,12 +21,12 @@ pub enum TokenType {
 
     // Operators
     OR = 8,
-    LEFT_BRACKET = 9,
-    RIGHT_BRACKET = 10,
+    LeftBracket = 9,
+    RightBracket = 10,
     COMMA = 11,
     DASH = 12,
-    LEFT_PAREN = 13,
-    RIGHT_PAREN = 14,
+    LeftParen = 13,
+    RightParen = 14,
     STAR = 15,
     COLON = 16,
 }
@@ -46,12 +46,12 @@ impl FromStr for TokenType {
             "X" => Ok(TokenType::X),
             "IDENT" => Ok(TokenType::IDENT),
             "OR" => Ok(TokenType::OR),
-            "LEFT_BRACKET" => Ok(TokenType::LEFT_BRACKET),
-            "RIGHT_BRACKET" => Ok(TokenType::RIGHT_BRACKET),
+            "LEFT_BRACKET" => Ok(TokenType::LeftBracket),
+            "RIGHT_BRACKET" => Ok(TokenType::RightBracket),
             "COMMA" => Ok(TokenType::COMMA),
             "DASH" => Ok(TokenType::DASH),
-            "LEFT_PAREN" => Ok(TokenType::LEFT_PAREN),
-            "RIGHT_PAREN" => Ok(TokenType::RIGHT_PAREN),
+            "LEFT_PAREN" => Ok(TokenType::LeftParen),
+            "RIGHT_PAREN" => Ok(TokenType::RightParen),
             "STAR" => Ok(TokenType::STAR),
             "COLON" => Ok(TokenType::COLON),
             _ => Err(format!("Unknown token type: {}", s)),
@@ -160,11 +160,11 @@ impl Lexer {
             }),
             '[' => Some(Token {
                 text: self.cur_char.to_string(),
-                kind: TokenType::LEFT_BRACKET,
+                kind: TokenType::LeftBracket,
             }),
             ']' => Some(Token {
                 text: self.cur_char.to_string(),
-                kind: TokenType::RIGHT_BRACKET,
+                kind: TokenType::RightBracket,
             }),
             ',' => Some(Token {
                 text: self.cur_char.to_string(),
@@ -176,11 +176,11 @@ impl Lexer {
             }),
             '(' => Some(Token {
                 text: self.cur_char.to_string(),
-                kind: TokenType::LEFT_PAREN,
+                kind: TokenType::LeftParen,
             }),
             ')' => Some(Token {
                 text: self.cur_char.to_string(),
-                kind: TokenType::RIGHT_PAREN,
+                kind: TokenType::RightParen,
             }),
             '*' => Some(Token {
                 text: self.cur_char.to_string(),

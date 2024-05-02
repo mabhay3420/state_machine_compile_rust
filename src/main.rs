@@ -1,5 +1,5 @@
 use state_machine_compiler_rust::{
-    lexer::{Lexer, TokenType},
+    lexer::Lexer,
     parser::{Parser, ToDot},
 };
 use std::{
