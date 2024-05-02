@@ -1,17 +1,21 @@
 digraph {
-  "b" [shape=doublecircle];
-  "o" [shape=circle];
-  "q" [shape=circle];
-  "p" [shape=circle];
-  "f" [shape=circle];
-  "b" -> "o" [label="* / P(e)-R-P(e)-R-P(0)-R-R-P(0)-L-L"];
-  "o" -> "o" [label="[1] / R-P(x)-L-L-L"];
-  "o" -> "q" [label="[0] / X"];
-  "q" -> "q" [label="[0,1] / R-R"];
-  "q" -> "p" [label="[X] / P(1)-L"];
-  "p" -> "q" [label="[x] / P(X)-R"];
-  "p" -> "f" [label="[e] / R"];
-  "p" -> "p" [label="[X] / L-L"];
-  "f" -> "f" [label="* / R-R"];
-  "f" -> "o" [label="[X] / P(0)-L-L"];
-}
+  rankdir=LR;
+  labelloc="t";
+  node [shape=circle, style=filled, fillcolor=lightblue, fontname="Arial"];
+  edge [fontcolor=blue, fontname="Arial"];
+  "b" [shape=doublecircle, fillcolor=lightgreen, width=1.5, height=1.5];
+  "o" [shape=circle, fillcolor=lightblue, width=1.2, height=1.2];
+  "q" [shape=circle, fillcolor=lightblue, width=1.2, height=1.2];
+  "p" [shape=circle, fillcolor=lightblue, width=1.2, height=1.2];
+  "f" [shape=circle, fillcolor=lightblue, width=1.2, height=1.2];
+  "b" -> "o" [label="* / P(e)-R-P(e)-R-P(0)-R-R-P(0)-L-L", color=black];
+  "o" -> "o" [label="[1] / R-P(x)-L-L-L", color=black];
+  "o" -> "q" [label="[0] / X", color=black];
+  "q" -> "q" [label="[0,1] / R-R", color=black];
+  "q" -> "p" [label="[X] / P(1)-L", color=black];
+  "p" -> "q" [label="[x] / P(X)-R", color=black];
+  "p" -> "f" [label="[e] / R", color=black];
+  "p" -> "p" [label="[X] / L-L", color=black];
+  "f" -> "f" [label="* / R-R", color=black];
+  "f" -> "o" [label="[X] / P(0)-L-L", color=black];
+ } 

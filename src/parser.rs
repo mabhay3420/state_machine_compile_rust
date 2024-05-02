@@ -236,7 +236,14 @@ pub trait ToDot {
 
 impl ToDot for ParseTree {
     fn to_dot(&self) -> String {
-        let mut dot = String::from("digraph {\n");
+        let mut dot = String::from(
+            "digraph {
+  rankdir=LR;
+  labelloc=\"t\";
+  node [shape=circle, style=filled, fillcolor=lightblue, fontname=\"Arial\"];
+  edge [fontcolor=blue, fontname=\"Arial\"];
+",
+        );
 
         // Define states
         for state in &self.states {
@@ -245,7 +252,26 @@ impl ToDot for ParseTree {
             } else {
                 "circle"
             };
-            dot.push_str(&format!("  \"{}\" [shape={}];\n", state, shape));
+            let fillcolor = if state == &self.initial_state {
+                "lightgreen"
+            } else {
+                "lightblue"
+            };
+            let width = if state == &self.initial_state {
+                "1.5"
+            } else {
+                "1.2"
+            };
+            let height = if state == &self.initial_state {
+                "1.5"
+            } else {
+                "1.2"
+            };
+            dot.push_str(&format!(
+                "  \"{}\" [shape={}, fillcolor={}, width={}, height={}];
+",
+                state, shape, fillcolor, width, height
+            ));
         }
 
         // Define transitions
@@ -254,7 +280,6 @@ impl ToDot for ParseTree {
                 Condition::OR(symbols) => format!("[{}]", symbols.join(",")),
                 Condition::Star => "*".to_string(),
             };
-
             let steps: Vec<String> = transition
                 .steps
                 .iter()
@@ -265,19 +290,19 @@ impl ToDot for ParseTree {
                     TransitionStep::P(func) => format!("P({})", func),
                 })
                 .collect();
-
             let label = format!("{} / {}", condition, steps.join("-"));
+            let color = "black";
             dot.push_str(&format!(
-                "  \"{}\" -> \"{}\" [label=\"{}\"];\n",
-                transition.initial_state, transition.final_state, label
+                "  \"{}\" -> \"{}\" [label=\"{}\", color={}];
+",
+                transition.initial_state, transition.final_state, label, color
             ));
         }
 
-        dot.push_str("}\n");
+        dot.push_str( " } ",);
         dot
     }
 }
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct Parser {
     lexer: Lexer,
