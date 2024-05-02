@@ -32,25 +32,41 @@ fn main() {
     // Read source from file
     // Get the file path from the command line arguments
     let args: Vec<String> = std::env::args().collect();
-    let file_path = &args[1];
+    let input_file_path = &args[1];
     // Open the file and read its contents
-    let mut file = File::open(file_path).unwrap();
+    let mut file = File::open(input_file_path).unwrap();
     let mut source = String::new();
     file.read_to_string(&mut source).unwrap();
-    let lexer = Lexer::new(&source);
-    let mut parser = Parser::new(lexer);
 
+    println!("\n============\n");
+    let lexer = Lexer::new(&source);
+    println!("Lexed the input file");
+
+    println!("\n============\n");
+    let mut parser = Parser::new(lexer);
     parser.program();
+    println!("Parsed the input file");
+
+    println!("\n============\n");
     println!("{:?}", parser.tree);
 
     // Save the dot file
+    println!("\n============\n");
     let dot = parser.tree.to_dot();
-    let mut file = File::create("state_machine.dot").unwrap();
+    let dot_file_path = "state_machine.dot";
+    let mut file = File::create(dot_file_path).unwrap();
     // file.write_all(dot.as_bytes()).unwrap();
     file.write_all(dot.as_bytes()).unwrap();
+    println!("Written the dot file to {}", dot_file_path);
 
+    println!("\n============\n");
     let code = parser.tree.to_rust_code();
     // println!("{}", code);
-    let mut file = File::create("src/bin/state_machine.rs").unwrap();
+    let file_path = "src/bin/state_machine.rs";
+    let mut file = File::create(file_path).unwrap();
     file.write_all(code.as_bytes()).unwrap();
+
+    println!("\n============\n");
+    println!("Written the Rust code to {}", file_path);
+    println!("\n============\n")
 }
