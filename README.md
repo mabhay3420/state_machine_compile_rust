@@ -109,6 +109,13 @@ Two files:
 
 2. Generate the Rust code for the state machine.
 
+## Implementation via Rust Macros
+
+Instead of building a custom language, we can also use Rust macros to generate the code. However, due to some limitations of macros, the approach is a little verbose.
+
+Find the implementation [here](src/bin/state_machine_macro.rs).
+
+
 ## References
 
 - Inspired from discussion in [Alan Turing's 1936 paper](https://www.cs.virginia.edu/~robins/Turing_Paper_1936.pdf).
