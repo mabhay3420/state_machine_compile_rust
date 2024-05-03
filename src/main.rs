@@ -1,3 +1,4 @@
+use env_logger::Env;
 use state_machine_compiler_rust::{
     lexer::Lexer,
     parser::{Parser, ToDot},
@@ -18,8 +19,23 @@ struct Args {
 }
 
 fn main() {
-    env_logger::builder().format_timestamp(None).init();
 
+    // Logging initialization
+    env_logger::Builder::from_env(Env::default().default_filter_or("info"))
+        .format(|buf, record| {
+            // Only the module name and the line number are used for filtering
+            writeln!(
+                buf,
+                "[{}] {}:{} {}",
+                record.level(),
+                record.file().unwrap_or(""),
+                record.line().unwrap_or(0),
+                record.args()
+            )
+        })
+        .init();
+
+    // Argument parsing
     let args = Args::parse();
     debug!("Command line arguments: {:?}", args);
 
@@ -27,7 +43,7 @@ fn main() {
         Ok(file) => file,
         Err(e) => {
             error!("Failed to open input file: {}", e);
-            std::process::exit(1);
+            panic!("Failed to open input file: {}", e);
         }
     };
     let mut source = String::new();

@@ -1,4 +1,4 @@
- # State Machine Compiler
+# State Machine Compiler
 
 A compiler for state machines written in Rust.
 
@@ -24,6 +24,16 @@ f, *, R-R, f
 f, X, P(0)-L-L, o
 ```
 
+This state machine when run will generate following output:
+
+```
+001011011101111....
+```
+
+i.e. `0(1^n)` where `n` is from `0` to `infinity`.
+
+### Rules
+
 1. Each statement should be in a newline.
 2. Each transition is in a newline.
 3. `[b]` -> `b` is the initial state.
@@ -33,37 +43,67 @@ f, X, P(0)-L-L, o
 
 ## Usage
 
-```bash
-cargo run --bin state_machine_compiler_rust -- example.txt
+Clone the repository and run the following commands:
+
+1. Try with the [example.txt](example.txt) file:
+
+   ```bash
+   cargo run --bin state_machine_compiler_rust -- -i example.txt
+   ```
+
+2. Alternatively, pass the file path as an argument following the `-i` flag.
+
+3. To enable debug logging, set the `RUST_LOG` environment variable to `debug`.
+
+   ```bash
+   RUST_LOG=debug cargo run --bin state_machine_compiler_rust -- -i example.txt
+   ```
+
+<details> 
+<summary>If you are working with executable, then refer to following doc 
+</summary> 
+
+```bash 
+Usage: state_machine_compiler_rust --input-file-path <INPUT_FILE_PATH> 
+
+Options: 
+   -i, --input-file-path <INPUT_FILE_PATH>  
+   -h, --help Print help 
 ```
 
-Output:
+## Output
+
+Two files:
 
 1. `src/bin/state_machine.rs`
 
    To test the the generated Rust code: `cargo run --bin state_machine`
 
    Inputs:
+
    - `num_steps` - The number of steps to run the state machine.
    - `max_len` - The maximum length of the tape.
 
    Outputs:
-   - The tape content and intermediate states and transitions.
+
+   - The transitions
+   - The full tape content
+   - The cleaned tape content ( erasing the `X` symbol which stands for empty tape content)
 
 2. `state_machine.dot` is the state machine diagram.
 
+</details>
+
 ## Implementation
 
-1. Parse the input file and generate the state machine.
-
-   The data is stored in a `ParseTree` struct.
+1. Parse the input file and generate the state machine. The data is stored in a `ParseTree` struct.
 
    ```rust
    struct ParseTree {
-       states: Vec<String>,
-       initial_state: String,
-       symbols: Vec<String>,
-       transitions: Vec<Transition>,
+      states: Vec<String>,
+      initial_state: String,
+      symbols: Vec<String>,
+      transitions: Vec<Transition>,
    }
    ```
 
@@ -71,6 +111,7 @@ Output:
 
 ## References
 
-- Inspired from discussion in: ON COMPUTABLE NUMBERS, WITH AN APPLICATION TO THE ENTSCHEIDUNGSPROBLEM By A. M. TURING.
-- Rust Book
-- Claude
+- Inspired from discussion in [Alan Turing's 1936 paper](https://www.cs.cmu.edu/~aarti/papers/turing.pdf).
+- [Writing a compiler in python](https://austinhenley.com/blog/teenytinycompiler1.html)
+- [Rust Book](https://doc.rust-lang.org/book/ch19-06-macros.html)
+- [Claude](https://claude.ai/)
