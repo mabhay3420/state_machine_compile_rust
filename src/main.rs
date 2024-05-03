@@ -15,13 +15,10 @@ use log::{debug, error, info};
 struct Args {
     #[arg(short, long)]
     input_file_path: std::path::PathBuf,
-
-    #[arg(short, long, default_value_t = false)]
-    debug: bool,
 }
 
 fn main() {
-    env_logger::init();
+    env_logger::builder().format_timestamp(None).init();
 
     let args = Args::parse();
     debug!("Command line arguments: {:?}", args);

@@ -1,4 +1,5 @@
 use crate::lexer::{Lexer, Token, TokenType};
+use log::{debug, error, info};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Condition {
@@ -313,6 +314,7 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(lexer: Lexer) -> Self {
+        info!("Initializing Parser");
         let mut parser = Parser {
             lexer,
             cur_token: Token {
@@ -361,7 +363,8 @@ impl Parser {
 
     // Abort the parsing process with an error message
     fn abort(&self, message: &str) {
-        panic!("Parsing error: {}", message)
+        error!("Parsing error: {}", message);
+        panic!("Parsing error: {}", message);
     }
 
     // Try to consume the current token if it matches the expected token type
@@ -373,8 +376,8 @@ impl Parser {
     {
         if self.check_token(kind) {
             match kind {
-                TokenType::IDENT => println!("{:?}: {}", kind, self.cur_token.text),
-                _ => println!("{:?}", kind),
+                TokenType::IDENT => debug!("{:?}: {}", kind, self.cur_token.text),
+                _ => debug!("{:?}", kind),
             }
 
             if let Some(mut action) = action {
@@ -420,7 +423,7 @@ impl Parser {
             self.abort("Initial state already defined.");
         }
         self.consume(TokenType::RightBracket, None::<fn(&Token)>);
-        println!("INITIAL_STATE_IDENTIFIER");
+        debug!("INITIAL_STATE_IDENTIFIER");
     }
 
     // Parse a list of state identifiers: IDENT (',' IDENT)*
@@ -440,7 +443,7 @@ impl Parser {
                 break;
             }
             if !self.try_consume(TokenType::COMMA, None::<fn(&Token)>) {
-                println!("STATE_IDENTIFIER_LIST");
+                debug!("STATE_IDENTIFIER_LIST");
                 break;
             }
         }
@@ -465,7 +468,7 @@ impl Parser {
         self.consume(TokenType::COLON, None::<fn(&Token)>);
         self.state_identifier_list();
         self.consume(TokenType::NEWLINE, None::<fn(&Token)>);
-        println!("STATES_DECLARATION");
+        debug!("STATES_DECLARATION");
     }
 
     // Parse a list of symbol identifiers: IDENT (',' IDENT)*
@@ -497,7 +500,7 @@ impl Parser {
 
         // X is a special symbol
         self.tree.symbols.push("X".to_string());
-        println!("SYMBOL_IDENTIFIERS");
+        debug!("SYMBOL_IDENTIFIERS");
     }
 
     // Parse a symbols declaration: SYMBOLS ':' symbol_identifiers NEWLINE
@@ -506,7 +509,7 @@ impl Parser {
         self.consume(TokenType::COLON, None::<fn(&Token)>);
         self.symbol_identifiers();
         self.consume(TokenType::NEWLINE, None::<fn(&Token)>);
-        println!("SYMBOLS_DECLARATION");
+        debug!("SYMBOLS_DECLARATION");
     }
 
     // Parse a transition step: R | L | P '(' IDENT ')' | X
@@ -579,13 +582,12 @@ impl Parser {
         self.tree.transitions.last_mut().unwrap().steps.push(step);
     }
 
-    // Parse a list of transition steps: transition_step ('-' transition_step)*
     fn transition_steps(&mut self) {
         self.transition_step();
         while self.try_consume(TokenType::DASH, None::<fn(&Token)>) {
             self.transition_step();
         }
-        println!("TRANSITION_STEPS");
+        debug!("TRANSITION_STEPS");
     }
 
     // Parse a list of transition conditions: IDENT ('|' IDENT)*
@@ -626,7 +628,7 @@ impl Parser {
             }
         }
         self.tree.transitions.last_mut().unwrap().condition = Condition::OR(conditions);
-        println!("TRANSITION_CONDITION_LIST");
+        debug!("TRANSITION_CONDITION_LIST");
     }
 
     // Parse transition conditions: '*' | transition_condition_list
@@ -645,7 +647,7 @@ impl Parser {
         if star_condition {
             self.tree.transitions.last_mut().unwrap().condition = Condition::Star;
         }
-        println!("TRANSITION_CONDITIONS");
+        debug!("TRANSITION_CONDITIONS");
     }
 
     // Parse a transition declaration:
@@ -664,7 +666,7 @@ impl Parser {
         );
         self.tree.transitions.last_mut().unwrap().initial_state = initial_state;
 
-        println!("INITIAL_STATE_IDENTIFIER");
+        debug!("INITIAL_STATE_IDENTIFIER");
         self.consume(TokenType::COMMA, None::<fn(&Token)>);
 
         // Conditions
@@ -684,8 +686,8 @@ impl Parser {
             }),
         );
         self.tree.transitions.last_mut().unwrap().final_state = final_state;
-        println!("FINAL_STATE_IDENTIFIER");
-        println!("TRANSITION_DECLARATION");
+        debug!("FINAL_STATE_IDENTIFIER");
+        debug!("TRANSITION_DECLARATION");
     }
 
     // Parse transitions declarations:
@@ -700,7 +702,7 @@ impl Parser {
             }
             self.transition_declaration();
         }
-        println!("TRANSITION_DECLARATIONS");
+        debug!("TRANSITION_DECLARATIONS");
     }
 
     // Parse the entire program:
@@ -714,6 +716,6 @@ impl Parser {
         // Consume newlines
         while self.try_consume(TokenType::NEWLINE, None::<fn(&Token)>) {}
         self.consume(TokenType::EOF, None::<fn(&Token)>);
-        println!("PROGRAM");
+        debug!("PROGRAM");
     }
 }

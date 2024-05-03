@@ -1,3 +1,4 @@
+use log::{error, info};
 use std::str::FromStr;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -90,6 +91,7 @@ pub struct Lexer {
 
 impl Lexer {
     pub fn new(source: &str) -> Self {
+        info!("Initializing Lexer");
         let mut source_chars = source.chars().collect::<Vec<_>>();
         source_chars.push('\n');
 
@@ -128,7 +130,8 @@ impl Lexer {
     }
 
     pub fn abort(&self, message: &str) {
-        panic!("Lexical Error: {}", message); // Use {} directly for the message
+        error!("Lexical Error: {}", message);
+        panic!("Lexical Error: {}", message);
     }
 
     fn skip_whitespace(&mut self) {
