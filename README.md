@@ -111,7 +111,7 @@ Two files:
 
 ## References
 
-- Inspired from discussion in [Alan Turing's 1936 paper](https://www.cs.cmu.edu/~aarti/papers/turing.pdf).
+- Inspired from discussion in [Alan Turing's 1936 paper](https://www.cs.virginia.edu/~robins/Turing_Paper_1936.pdf).
 - [Writing a compiler in python](https://austinhenley.com/blog/teenytinycompiler1.html)
 - [Rust Book](https://doc.rust-lang.org/book/ch19-06-macros.html)
 - [Claude](https://claude.ai/)
