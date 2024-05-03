@@ -1,2 +1,6 @@
 1. Test with multiple state machines and verify the output.
 2. Read up about llvm, its rust bindings and try to generate the code in llvm IR.
+
+Considerations:
+1. Disallow utf-8 characters in the input file.
+2. Validate the parse tree in the end, resulting in better error messages and cleaner code.

@@ -238,11 +238,11 @@ impl ToDot for ParseTree {
     fn to_dot(&self) -> String {
         let mut dot = String::from(
             "digraph {
-  rankdir=LR;
-  labelloc=\"t\";
-  node [shape=circle, style=filled, fillcolor=lightblue, fontname=\"Arial\"];
-  edge [fontcolor=blue, fontname=\"Arial\"];
-",
+                rankdir=LR;
+                labelloc=\"t\";
+                node [shape=circle, style=filled, fillcolor=lightblue, fontname=\"Arial\"];
+                edge [fontcolor=blue, fontname=\"Arial\"];
+                ",
         );
 
         // Define states
@@ -268,8 +268,7 @@ impl ToDot for ParseTree {
                 "1.2"
             };
             dot.push_str(&format!(
-                "  \"{}\" [shape={}, fillcolor={}, width={}, height={}];
-",
+                "  \"{}\" [shape={}, fillcolor={}, width={}, height={}]; ",
                 state, shape, fillcolor, width, height
             ));
         }
@@ -299,10 +298,11 @@ impl ToDot for ParseTree {
             ));
         }
 
-        dot.push_str( " } ",);
+        dot.push_str(" } ");
         dot
     }
 }
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct Parser {
     lexer: Lexer,
@@ -340,7 +340,7 @@ impl Parser {
         self.cur_token.kind == kind
     }
 
-    // Check if the next token matches the expected token type
+    // Check if the next token has the expected token type
     fn check_peek(&self, kind: TokenType) -> bool {
         self.peek_token.kind == kind
     }

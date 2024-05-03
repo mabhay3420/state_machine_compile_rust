@@ -7,66 +7,63 @@ use std::{
     io::{Read, Write},
 };
 
+use clap::Parser as ClapParser;
+use log::{debug, error, info};
+// use env_logger::
+
+#[derive(ClapParser, Debug)]
+struct Args {
+    #[arg(short, long)]
+    input_file_path: std::path::PathBuf,
+
+    #[arg(short, long, default_value_t = false)]
+    debug: bool,
+}
+
 fn main() {
-    //     let source = r#"
-    // # State machine configuration
+    env_logger::init();
 
-    // STATES: [b], o, q, p, f
+    let args = Args::parse();
+    debug!("Command line arguments: {:?}", args);
 
-    // # Input symbols
-    // SYMBOLS: 0, 1, e, x
-
-    // TRANSITIONS:
-    // b, *, P(e)-R-P(e)-R-P(0)-R-R-P(0)-L-L, o
-    // o, 1, R-P(x)-L-L-L, o
-    // o, 0, X, q
-    // q, 0 | 1, R-R, q
-    // q, X, P(1)-L, p
-    // p, x, P(X)-R, q
-    // p, e, R, f
-    // p, X, L-L, p
-    // f, *, R-R, f
-    // f, X, P(0)-L-L, o
-    // "#;
-
-    // Read source from file
-    // Get the file path from the command line arguments
-    let args: Vec<String> = std::env::args().collect();
-    let input_file_path = &args[1];
-    // Open the file and read its contents
-    let mut file = File::open(input_file_path).unwrap();
+    let mut file = match File::open(&args.input_file_path) {
+        Ok(file) => file,
+        Err(e) => {
+            error!("Failed to open input file: {}", e);
+            std::process::exit(1);
+        }
+    };
     let mut source = String::new();
-    file.read_to_string(&mut source).unwrap();
+    if let Err(e) = file.read_to_string(&mut source) {
+        error!("Failed to read input file: {}", e);
+        std::process::exit(1);
+    }
 
-    println!("\n============\n");
+    info!("Lexing the input file");
     let lexer = Lexer::new(&source);
-    println!("Lexed the input file");
 
-    println!("\n============\n");
+    info!("Parsing the input file");
     let mut parser = Parser::new(lexer);
     parser.program();
-    println!("Parsed the input file");
 
-    println!("\n============\n");
-    println!("{:?}", parser.tree);
+    debug!("Parsed tree: {:?}", parser.tree);
 
-    // Save the dot file
-    println!("\n============\n");
+    info!("Generating the dot file");
     let dot = parser.tree.to_dot();
     let dot_file_path = "state_machine.dot";
-    let mut file = File::create(dot_file_path).unwrap();
-    // file.write_all(dot.as_bytes()).unwrap();
-    file.write_all(dot.as_bytes()).unwrap();
-    println!("Written the dot file to {}", dot_file_path);
+    if let Err(e) = File::create(dot_file_path).and_then(|mut file| file.write_all(dot.as_bytes()))
+    {
+        error!("Failed to write the dot file: {}", e);
+    } else {
+        info!("Written the dot file to {}", dot_file_path);
+    }
 
-    println!("\n============\n");
+    info!("Generating the Rust code");
     let code = parser.tree.to_rust_code();
-    // println!("{}", code);
     let file_path = "src/bin/state_machine.rs";
-    let mut file = File::create(file_path).unwrap();
-    file.write_all(code.as_bytes()).unwrap();
-
-    println!("\n============\n");
-    println!("Written the Rust code to {}", file_path);
-    println!("\n============\n")
+    if let Err(e) = File::create(file_path).and_then(|mut file| file.write_all(code.as_bytes())) {
+        error!("Failed to write the Rust code: {}", e);
+    } else {
+        info!("Written the Rust code to {}", file_path);
+    }
 }
