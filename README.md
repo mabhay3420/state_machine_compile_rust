@@ -2,6 +2,8 @@
 
 A compiler for state machines written in Rust.
 
+Read about it on [Blog](https://mabhay3420.github.io/2024-05-07-state-machine-compiler-a-small-language/)
+
 ## Syntax Details
 
 Look at the example below:
