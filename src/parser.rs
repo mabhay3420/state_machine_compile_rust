@@ -181,9 +181,10 @@ impl ParseTree {
             };
 
             code.push_str(&format!(
-                "            (TapeMachineState::{}, {}) => {{\n",
+                "            (TapeMachineState::{}, {}) =>",
                 transition.initial_state, condition
             ));
+            code.push_str("{\n");
 
             for step in &transition.steps {
                 match step {

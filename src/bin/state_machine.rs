@@ -71,19 +71,19 @@ fn main() {
             i, tape_machine.state, tape_machine.result[tape_machine.index]);
 
         match (tape_machine.state, &tape_machine.result[tape_machine.index]) {
-            (TapeMachineState::b, TapeMachineSymbol::Symbol0) => {
+            (TapeMachineState::b, TapeMachineSymbol::Symbol0) =>{
                 tape_machine.r();
                 tape_machine.p(TapeMachineSymbol::Symbol1);
                 tape_machine.state = &TapeMachineState::b;
                 println!("Final State: {:?}", TapeMachineState::b);
             }
-            (TapeMachineState::b, TapeMachineSymbol::Symbol1) => {
+            (TapeMachineState::b, TapeMachineSymbol::Symbol1) =>{
                 tape_machine.r();
                 tape_machine.p(TapeMachineSymbol::Symbol0);
                 tape_machine.state = &TapeMachineState::a;
                 println!("Final State: {:?}", TapeMachineState::a);
             }
-            (TapeMachineState::a, _) => {
+            (TapeMachineState::a, _) =>{
                 tape_machine.p(TapeMachineSymbol::Symbol0);
                 tape_machine.state = &TapeMachineState::b;
                 println!("Final State: {:?}", TapeMachineState::b);
