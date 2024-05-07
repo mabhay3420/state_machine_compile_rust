@@ -152,9 +152,13 @@ macro_rules! transition_rules {
     };
 }
 
-states!(B, O, Q, P, F);
+// states!(B, O, Q, P, F);
+// symbols!((Zero, "0"), (One, "1"), (X, "x"));
+// init_tape!();
+states!(A, B);
 symbols!((Zero, "0"), (One, "1"), (X, "x"));
 init_tape!();
+
 // 0010110111011110111110111111011111110111111110111111111
 
 // To test: rustc +nightly -Zunpretty=expanded src/main.rs
@@ -191,25 +195,49 @@ fn main() {
     let max_len = 1000;
     let steps = 100;
     let mut result: Vec<&TapeMachineSymbol> = vec![&TapeMachineSymbol::B; max_len];
-    let mut tape_machine = TapeMachine::new(&TapeMachineState::B, &mut result);
+    // A is the initial state
+    let mut tape_machine = TapeMachine::new(&TapeMachineState::A, &mut result);
     transition_rules!(
         tape_machine,
         steps,
-        { [B], [A], [P!(tape_machine, E), R!(tape_machine), P!(tape_machine, E), R!(tape_machine), P!(tape_machine, Zero), R!(tape_machine), R!(tape_machine), P!(tape_machine, Zero), L!(tape_machine), L!(tape_machine)], [O] },
-        { [O], [One], [R!(tape_machine), P!(tape_machine, X), L!(tape_machine), L!(tape_machine), L!(tape_machine)], [O] },
-        { [O], [Zero], [], [Q] },
-        { [Q], [Zero | One], [R!(tape_machine), R!(tape_machine)], [Q] },
-        { [Q], [B], [P!(tape_machine, One), L!(tape_machine)], [P] },
-        { [P], [X], [E!(tape_machine), R!(tape_machine)], [Q] },
-        { [P], [E], [R!(tape_machine)], [F] },
-        { [P], [B], [L!(tape_machine), L!(tape_machine)], [P] },
-        { [F], [B], [P!(tape_machine, Zero), L!(tape_machine), L!(tape_machine)], [O] },
-        { [F], [A], [R!(tape_machine), R!(tape_machine)], [F] }
+        {[A], [A], [P!(tape_machine, Zero)],[B]},
+        {[B], [Zero], [R!(tape_machine), P!(tape_machine, One)], [B]},
+        {[B], [One], [R!(tape_machine)], [A]}
     );
+
     let binary_result = tape_machine
         .result
         .iter()
         .map(|x| x.as_str())
         .collect::<String>();
+
+    // 010101..
     println!("{}", binary_result);
 }
+
+// fn main() {
+//     let max_len = 1000;
+//     let steps = 100;
+//     let mut result: Vec<&TapeMachineSymbol> = vec![&TapeMachineSymbol::B; max_len];
+//     let mut tape_machine = TapeMachine::new(&TapeMachineState::B, &mut result);
+//     transition_rules!(
+//         tape_machine,
+//         steps,
+//         { [B], [A], [P!(tape_machine, E), R!(tape_machine), P!(tape_machine, E), R!(tape_machine), P!(tape_machine, Zero), R!(tape_machine), R!(tape_machine), P!(tape_machine, Zero), L!(tape_machine), L!(tape_machine)], [O] },
+//         { [O], [One], [R!(tape_machine), P!(tape_machine, X), L!(tape_machine), L!(tape_machine), L!(tape_machine)], [O] },
+//         { [O], [Zero], [], [Q] },
+//         { [Q], [Zero | One], [R!(tape_machine), R!(tape_machine)], [Q] },
+//         { [Q], [B], [P!(tape_machine, One), L!(tape_machine)], [P] },
+//         { [P], [X], [E!(tape_machine), R!(tape_machine)], [Q] },
+//         { [P], [E], [R!(tape_machine)], [F] },
+//         { [P], [B], [L!(tape_machine), L!(tape_machine)], [P] },
+//         { [F], [B], [P!(tape_machine, Zero), L!(tape_machine), L!(tape_machine)], [O] },
+//         { [F], [A], [R!(tape_machine), R!(tape_machine)], [F] }
+//     );
+//     let binary_result = tape_machine
+//         .result
+//         .iter()
+//         .map(|x| x.as_str())
+//         .collect::<String>();
+//     println!("{}", binary_result);
+// }

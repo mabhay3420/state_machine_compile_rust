@@ -115,6 +115,16 @@ Instead of building a custom language, we can also use Rust macros to generate t
 
 Find the implementation [here](src/bin/state_machine_macro.rs).
 
+You can directly run the macro by running the following command:
+   ```bash
+   cargo run --bin state_machine_macro 
+   ```
+
+If you want to see the expanded code, you can run the following command:
+   ```bash
+   rustc +nightly -Zunpretty=expanded src/bin/state_machine_macro.rs
+   ```
+
 
 ## References
 
