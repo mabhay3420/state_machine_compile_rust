@@ -1,0 +1,5 @@
+[alias]
+run_example = "run --bin state_machine_compiler_rust -- -i example.txt"
+
+[build]
+rustflags = ["-L", "/opt/homebrew/lib"]

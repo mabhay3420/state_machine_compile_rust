@@ -3,14 +3,19 @@ use std::io;
 
 #[derive(Debug, PartialEq, Eq)]
 enum TapeMachineState {
-    a,
     b,
+    o,
+    q,
+    p,
+    f,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 enum TapeMachineSymbol {
     Symbol0,
     Symbol1,
+    Symbole,
+    Symbolx,
     SymbolX,
 }
 
@@ -19,6 +24,8 @@ impl TapeMachineSymbol {
         match self {
             TapeMachineSymbol::Symbol0 => "0",
             TapeMachineSymbol::Symbol1 => "1",
+            TapeMachineSymbol::Symbole => "e",
+            TapeMachineSymbol::Symbolx => "x",
             TapeMachineSymbol::SymbolX => "X"
         }
     }
@@ -64,29 +71,82 @@ fn main() {
     let max_len: usize = tape_length_input.trim().parse().unwrap();
 
     let mut result = vec![TapeMachineSymbol::SymbolX; max_len];
-    let mut tape_machine = TapeMachine::new(&TapeMachineState::a, &mut result);
+    let mut tape_machine = TapeMachine::new(&TapeMachineState::b, &mut result);
 
     for i in 0..steps {
         println!("Step: {} State: {:?} Symbol: {:?}",
             i, tape_machine.state, tape_machine.result[tape_machine.index]);
 
         match (tape_machine.state, &tape_machine.result[tape_machine.index]) {
-            (TapeMachineState::b, TapeMachineSymbol::Symbol0) =>{
+            (TapeMachineState::o, TapeMachineSymbol::Symbol1) =>{
                 tape_machine.r();
+                tape_machine.p(TapeMachineSymbol::Symbolx);
+                tape_machine.l();
+                tape_machine.l();
+                tape_machine.l();
+                tape_machine.state = &TapeMachineState::o;
+                println!("Final State: {:?}", TapeMachineState::o);
+            }
+            (TapeMachineState::o, TapeMachineSymbol::Symbol0) =>{
+                // X means do nothing
+                tape_machine.state = &TapeMachineState::q;
+                println!("Final State: {:?}", TapeMachineState::q);
+            }
+            (TapeMachineState::q, TapeMachineSymbol::Symbol0 | TapeMachineSymbol::Symbol1) =>{
+                tape_machine.r();
+                tape_machine.r();
+                tape_machine.state = &TapeMachineState::q;
+                println!("Final State: {:?}", TapeMachineState::q);
+            }
+            (TapeMachineState::q, TapeMachineSymbol::SymbolX) =>{
                 tape_machine.p(TapeMachineSymbol::Symbol1);
-                tape_machine.state = &TapeMachineState::b;
-                println!("Final State: {:?}", TapeMachineState::b);
+                tape_machine.l();
+                tape_machine.state = &TapeMachineState::p;
+                println!("Final State: {:?}", TapeMachineState::p);
             }
-            (TapeMachineState::b, TapeMachineSymbol::Symbol1) =>{
+            (TapeMachineState::p, TapeMachineSymbol::Symbolx) =>{
+                tape_machine.p(TapeMachineSymbol::SymbolX);
+                tape_machine.r();
+                tape_machine.state = &TapeMachineState::q;
+                println!("Final State: {:?}", TapeMachineState::q);
+            }
+            (TapeMachineState::p, TapeMachineSymbol::Symbole) =>{
+                tape_machine.r();
+                tape_machine.state = &TapeMachineState::f;
+                println!("Final State: {:?}", TapeMachineState::f);
+            }
+            (TapeMachineState::p, TapeMachineSymbol::SymbolX) =>{
+                tape_machine.l();
+                tape_machine.l();
+                tape_machine.state = &TapeMachineState::p;
+                println!("Final State: {:?}", TapeMachineState::p);
+            }
+            (TapeMachineState::f, TapeMachineSymbol::SymbolX) =>{
+                tape_machine.p(TapeMachineSymbol::Symbol0);
+                tape_machine.l();
+                tape_machine.l();
+                tape_machine.state = &TapeMachineState::o;
+                println!("Final State: {:?}", TapeMachineState::o);
+            }
+            (TapeMachineState::b, _) =>{
+                tape_machine.p(TapeMachineSymbol::Symbole);
+                tape_machine.r();
+                tape_machine.p(TapeMachineSymbol::Symbole);
                 tape_machine.r();
                 tape_machine.p(TapeMachineSymbol::Symbol0);
-                tape_machine.state = &TapeMachineState::a;
-                println!("Final State: {:?}", TapeMachineState::a);
-            }
-            (TapeMachineState::a, _) =>{
+                tape_machine.r();
+                tape_machine.r();
                 tape_machine.p(TapeMachineSymbol::Symbol0);
-                tape_machine.state = &TapeMachineState::b;
-                println!("Final State: {:?}", TapeMachineState::b);
+                tape_machine.l();
+                tape_machine.l();
+                tape_machine.state = &TapeMachineState::o;
+                println!("Final State: {:?}", TapeMachineState::o);
+            }
+            (TapeMachineState::f, _) =>{
+                tape_machine.r();
+                tape_machine.r();
+                tape_machine.state = &TapeMachineState::f;
+                println!("Final State: {:?}", TapeMachineState::f);
             }
             (_, _) => {
                 println!("State: {:?} Index: {:?} Symbol: {:?}", tape_machine.state, tape_machine.index, tape_machine.result[tape_machine.index]);
