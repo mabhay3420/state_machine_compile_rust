@@ -1,0 +1,22 @@
+   Compiling state_machine_compiler_rust v0.1.0 (/Users/mabhay/projects/state_machine_compiler_rust)
+warning: unnecessary `unsafe` block
+  --> src/main.rs:83:5
+   |
+83 |     unsafe {
+   |     ^^^^^^ unnecessary `unsafe` block
+   |
+   = note: `#[warn(unused_unsafe)]` on by default
+
+warning: `state_machine_compiler_rust` (bin "state_machine_compiler_rust") generated 1 warning
+    Finished dev [unoptimized + debuginfo] target(s) in 1.62s
+     Running `target/debug/state_machine_compiler_rust -i example.txt`
+[INFO] src/main.rs:54 Lexing the input file
+[INFO] src/lexer.rs:94 Initializing Lexer
+[INFO] src/main.rs:57 Parsing the input file
+[INFO] src/parser.rs:318 Initializing Parser
+[INFO] src/main.rs:63 Generating the dot file
+[INFO] src/main.rs:70 Written the dot file to state_machine.dot
+[INFO] src/main.rs:73 Generating the Rust code
+[INFO] src/main.rs:79 Written the Rust code to src/bin/state_machine.rs
+[INFO] src/main.rs:82 Generating llvm ir 
+[INFO] src/main.rs:89 Written the LLVM IR to state_machine.ll
