@@ -34,8 +34,7 @@ pkgs.mkShell {
     # Set environment variables
     # export LLVM_SOURCE_DIR="/Users/mabhay/projects/llvm-project-llvmorg-18.1.8"
 
-    # For Rust bindings
-
+    echo ">> Going to use vim in shell - change this if you don't like that"
     # Use Vi keybindings in Zsh
     set -o vi
 
@@ -50,8 +49,8 @@ pkgs.mkShell {
     # export RUST_BACKTRACE=1
 
     # Confirmation message
-    echo "✅ Fully reproducible development environment loaded with LLVM 18, LLDB 18, Rust, Zsh, Git and Vim!"
     echo "🛠️  Edit 'shell.nix' and run 'nix-shell --pure' to add new packages"
+    echo "✅ Fully reproducible development environment loaded with LLVM 18, LLDB 18, Rust, Git and Vim!"
   '';
 
 }
