@@ -1,7 +1,7 @@
 #![allow(unused)]
 use std::collections::{HashMap, HashSet};
 
-use crate::parser::{Condition, ParseTree, Transition,TransitionStep};
+use crate::parser::{Condition, ParseTree, Transition, TransitionStep};
 use inkwell::basic_block::BasicBlock;
 use inkwell::context::Context;
 use inkwell::targets::TargetTriple;
@@ -40,6 +40,8 @@ impl ToLlvmIr for ParseTree {
         let scanf_fn = module.add_function("scanf", scanf_type, None);
 
         // Prepare state and symbol mappings
+
+        // THOUGHT - If states are repeated, we do what?
         let state_to_int: HashMap<String, u64> = self
             .states
             .iter()
@@ -98,21 +100,55 @@ impl ToLlvmIr for ParseTree {
         builder.build_store(index_ptr, i32_type.const_int(0, false));
 
         // Prompt user for input (number of steps)
-        let num_steps_prompt = builder.build_global_string_ptr("Enter number of steps: ", "num_steps_prompt").unwrap();
+        let num_steps_prompt = builder
+            .build_global_string_ptr("Enter number of steps: ", "num_steps_prompt")
+            .unwrap();
         let scanf_format = builder.build_global_string_ptr("%d", "scanf_format").unwrap();
-        builder.build_call(printf_fn, &[num_steps_prompt.as_pointer_value().into()], "printf");
-        builder.build_call(scanf_fn, &[scanf_format.as_pointer_value().into(), num_steps_ptr.into()], "scanf");
+        builder
+            .build_call(
+                printf_fn,
+                &[num_steps_prompt.as_pointer_value().into()],
+                "printf",
+            )
+            .unwrap();
+        builder
+            .build_call(
+                scanf_fn,
+                &[scanf_format.as_pointer_value().into(), num_steps_ptr.into()],
+                "scanf",
+            )
+            .unwrap();
 
         // Load num_steps value
-        let num_steps = builder.build_load(i32_type, num_steps_ptr, "num_steps").unwrap().into_int_value();
+        let num_steps = builder
+            .build_load(i32_type, num_steps_ptr, "num_steps")
+            .unwrap()
+            .into_int_value();
 
         // Prompt user for input (array size)
-        let arr_size_prompt = builder.build_global_string_ptr("Enter array size: ", "arr_size_prompt").unwrap();
-        builder.build_call(printf_fn, &[arr_size_prompt.as_pointer_value().into()], "printf");
-        builder.build_call(scanf_fn, &[scanf_format.as_pointer_value().into(), arr_size_ptr.into()], "scanf");
+        let arr_size_prompt = builder
+            .build_global_string_ptr("Enter array size: ", "arr_size_prompt")
+            .unwrap();
+        builder
+            .build_call(
+                printf_fn,
+                &[arr_size_prompt.as_pointer_value().into()],
+                "printf",
+            )
+            .unwrap();
+        builder
+            .build_call(
+                scanf_fn,
+                &[scanf_format.as_pointer_value().into(), arr_size_ptr.into()],
+                "scanf",
+            )
+            .unwrap();
 
         // Allocate tape dynamically using malloc
-        let arr_size = builder.build_load(i32_type, arr_size_ptr, "arr_size").unwrap().into_int_value();
+        let arr_size = builder
+            .build_load(i32_type, arr_size_ptr, "arr_size")
+            .unwrap()
+            .into_int_value();
         let tape_ptr = builder
             .build_call(malloc_fn, &[arr_size.into()], "tape_malloc")
             .unwrap()
@@ -132,15 +168,23 @@ impl ToLlvmIr for ParseTree {
 
         // Loop condition
         builder.position_at_end(init_loop);
-        let i_val = builder.build_load(i32_type, i, "i_val").unwrap().into_int_value();
-        let cond = builder.build_int_compare(IntPredicate::ULT, i_val, arr_size, "init_cond").unwrap();
+        let i_val = builder
+            .build_load(i32_type, i, "i_val")
+            .unwrap()
+            .into_int_value();
+        let cond = builder
+            .build_int_compare(IntPredicate::ULT, i_val, arr_size, "init_cond")
+            .unwrap();
         builder.build_conditional_branch(cond, init_loop_body, init_loop_end);
 
         // Loop body: initialize tape with 'X'
         builder.position_at_end(init_loop_body);
-        let element_ptr = unsafe { builder.build_gep(i8_type, tape_ptr, &[i_val], "element_ptr").unwrap() };
+        let element_ptr =
+            unsafe { builder.build_gep(i8_type, tape_ptr, &[i_val], "element_ptr").unwrap() };
         builder.build_store(element_ptr, i8_type.const_int('X' as u64, false));
-        let next_i = builder.build_int_add(i_val, i32_type.const_int(1, false), "next_i").unwrap();
+        let next_i = builder
+            .build_int_add(i_val, i32_type.const_int(1, false), "next_i")
+            .unwrap();
         builder.build_store(i, next_i);
         builder.build_unconditional_branch(init_loop);
 
@@ -166,26 +210,36 @@ impl ToLlvmIr for ParseTree {
         builder.position_at_end(main_loop);
 
         // Check if we've reached the maximum number of steps
-        let current_step = builder.build_load(i32_type, step_counter, "current_step").unwrap().into_int_value();
-        let continue_loop = builder.build_int_compare(IntPredicate::ULT, current_step, num_steps, "continue_loop").unwrap();
+        let current_step = builder
+            .build_load(i32_type, step_counter, "current_step")
+            .unwrap()
+            .into_int_value();
+        let continue_loop = builder
+            .build_int_compare(IntPredicate::ULT, current_step, num_steps, "continue_loop")
+            .unwrap();
         builder.build_conditional_branch(continue_loop, main_loop_body, main_loop_end);
 
         // Main loop body
         builder.position_at_end(main_loop_body);
 
         // Load current state and symbol
-        let current_state = builder.build_load(i32_type, state_ptr_alloca, "current_state").unwrap().into_int_value();
-        let current_index = builder.build_load(i32_type, index_ptr, "current_index").unwrap().into_int_value();
-        let current_symbol_ptr = unsafe { builder.build_gep(i8_type, tape_ptr, &[current_index], "current_symbol_ptr").unwrap() };
-        let current_symbol = builder.build_load(i8_type, current_symbol_ptr, "current_symbol").unwrap().into_int_value();
+        let current_state = builder
+            .build_load(i32_type, state_ptr_alloca, "current_state")
+            .unwrap()
+            .into_int_value();
+        let current_index = builder
+            .build_load(i32_type, index_ptr, "current_index")
+            .unwrap()
+            .into_int_value();
+        let current_symbol_ptr =
+            unsafe { builder.build_gep(i8_type, tape_ptr, &[current_index], "current_symbol_ptr").unwrap() };
+        let current_symbol = builder
+            .build_load(i8_type, current_symbol_ptr, "current_symbol")
+            .unwrap()
+            .into_int_value();
 
         // Map current_symbol (i8) to symbol_int (i32)
         let symbol_int_ptr = builder.build_alloca(i32_type, "symbol_int").unwrap();
-        let symbol_switch_block = context.append_basic_block(main_fn, "symbol_switch");
-        let after_symbol_switch = context.append_basic_block(main_fn, "after_symbol_switch");
-        builder.build_unconditional_branch(symbol_switch_block);
-
-        builder.position_at_end(symbol_switch_block);
 
         // Build switch on current_symbol
         let mut symbol_cases = Vec::new();
@@ -196,16 +250,17 @@ impl ToLlvmIr for ParseTree {
             // In each case block
             builder.position_at_end(case_block);
             builder.build_store(symbol_int_ptr, i32_type.const_int(symbol_int_value, false));
-            builder.build_unconditional_branch(after_symbol_switch);
+            builder.build_unconditional_branch(main_loop); // After setting symbol_int, go back to main_loop
         }
         // Default case
         let symbol_default_block = context.append_basic_block(main_fn, "symbol_default");
         builder.position_at_end(symbol_default_block);
         // Store a special value for unknown symbol (e.g., -1)
         builder.build_store(symbol_int_ptr, i32_type.const_int(-1i64 as u64, false));
-        builder.build_unconditional_branch(after_symbol_switch);
+        builder.build_unconditional_branch(main_loop);
 
-        builder.position_at_end(symbol_switch_block);
+        // Build switch on current_symbol
+        builder.position_at_end(main_loop_body);
         builder.build_switch(
             current_symbol,
             symbol_default_block,
@@ -215,8 +270,12 @@ impl ToLlvmIr for ParseTree {
                 .collect::<Vec<_>>(),
         );
 
-        builder.position_at_end(after_symbol_switch);
-        let symbol_int = builder.build_load(i32_type, symbol_int_ptr, "symbol_int").unwrap().into_int_value();
+        // In main_loop, load symbol_int
+        builder.position_at_end(main_loop);
+        let symbol_int = builder
+            .build_load(i32_type, symbol_int_ptr, "symbol_int")
+            .unwrap()
+            .into_int_value();
 
         // Create blocks for each state
         let mut state_blocks: HashMap<u64, BasicBlock> = HashMap::new();
@@ -229,10 +288,14 @@ impl ToLlvmIr for ParseTree {
         let default_state_block = context.append_basic_block(main_fn, "default_state");
 
         // Build switch on current_state
+        builder.position_at_end(main_loop);
         builder.build_switch(
             current_state,
             default_state_block,
-            &state_cases.iter().map(|(val, block)| (*val, *block)).collect::<Vec<_>>(),
+            &state_cases
+                .iter()
+                .map(|(val, block)| (*val, *block))
+                .collect::<Vec<_>>(),
         );
 
         // For each state, collect transitions for that state
@@ -242,106 +305,106 @@ impl ToLlvmIr for ParseTree {
             state_transitions.entry(state_int).or_default().push(transition);
         }
 
-        // For each state, build transitions
-        for (&state_int, transitions) in &state_transitions {
-            let state_block = state_blocks[&state_int];
-            builder.position_at_end(state_block);
+                // For each state, build transitions
+                for (&state_int, transitions) in &state_transitions {
+                    // Skip generating a state block if there are no transitions
+                    if transitions.is_empty() {
+                        continue;
+                    }
 
-            // Collect symbol cases for this state
-            let mut symbol_cases = Vec::new();
-            let mut default_block = None;
+                    let state_block = state_blocks[&state_int];
+                    builder.position_at_end(state_block);
 
-            for transition in transitions {
-                match &transition.condition {
-                    Condition::OR(symbols) => {
-                        for symbol in symbols {
-                            let symbol_int = symbol_to_int[symbol];
-                            let trans_block = context.append_basic_block(main_fn, &format!("transition_{}_{}", state_int, symbol_int));
+                    // Collect symbol cases for this state
+                    let mut symbol_cases = Vec::new();
+                    let mut default_block = None;
 
-                            symbol_cases.push((i32_type.const_int(symbol_int, false), trans_block));
+                    for transition in transitions {
+                        match &transition.condition {
+                            Condition::OR(symbols) => {
+                                for symbol in symbols {
+                                    let symbol_int = symbol_to_int[symbol];
+                                    let trans_block = context.append_basic_block(
+                                        main_fn,
+                                        &format!("transition_{}_{}", state_int, symbol_int),
+                                    );
 
-                            // Implement transition logic in trans_block
-                            builder.position_at_end(trans_block);
-                            self.perform_transition_steps(
-                                &builder,
-                                &context,
-                                &i32_type,
-                                &i8_type,
-                                &printf_fn,
-                                tape_ptr,
-                                index_ptr,
-                                state_ptr_alloca,
-                                step_counter,
-                                &transition.steps,
-                                &transition.final_state,
-                                &state_to_int,
-                                main_loop,
-                            );
+                                    symbol_cases.push((i32_type.const_int(symbol_int, false), trans_block));
+
+                                    // Implement transition logic in trans_block
+                                    builder.position_at_end(trans_block);
+                                    self.perform_transition_steps(
+                                        &builder,
+                                        &context,
+                                        &i32_type,
+                                        &i8_type,
+                                        &printf_fn,
+                                        tape_ptr,
+                                        index_ptr,
+                                        state_ptr_alloca,
+                                        step_counter,
+                                        &transition.steps,
+                                        &transition.final_state,
+                                        &state_to_int,
+                                        main_loop,
+                                    );
+                                }
+                            }
+                            Condition::Star => {
+                                let trans_block = context.append_basic_block(
+                                    main_fn,
+                                    &format!("transition_{}_default", state_int),
+                                );
+
+                                default_block = Some(trans_block);
+
+                                // Implement transition logic in trans_block
+                                builder.position_at_end(trans_block);
+                                self.perform_transition_steps(
+                                    &builder,
+                                    &context,
+                                    &i32_type,
+                                    &i8_type,
+                                    &printf_fn,
+                                    tape_ptr,
+                                    index_ptr,
+                                    state_ptr_alloca,
+                                    step_counter,
+                                    &transition.steps,
+                                    &transition.final_state,
+                                    &state_to_int,
+                                    main_loop,
+                                );
+                            }
                         }
                     }
-                    Condition::Star => {
-                        let trans_block = context.append_basic_block(main_fn, &format!("transition_{}_default", state_int));
 
-                        default_block = Some(trans_block);
+                    // Build switch on symbol_int in state_block
+                    builder.position_at_end(state_block);
 
-                        // Implement transition logic in trans_block
-                        builder.position_at_end(trans_block);
-                        self.perform_transition_steps(
-                            &builder,
-                            &context,
-                            &i32_type,
-                            &i8_type,
-                            &printf_fn,
-                            tape_ptr,
-                            index_ptr,
-                            state_ptr_alloca,
-                            step_counter,
-                            &transition.steps,
-                            &transition.final_state,
-                            &state_to_int,
-                            main_loop,
+                    if !symbol_cases.is_empty() {
+                        let default_symbol_block = default_block.unwrap_or_else(|| {
+                            // If there's no default transition, branch back to main_loop
+                            builder.build_unconditional_branch(main_loop);
+                            main_loop
+                        });
+
+                        builder.build_switch(
+                            symbol_int,
+                            default_symbol_block,
+                            &symbol_cases
+                                .iter()
+                                .map(|(val, block)| (*val, *block))
+                                .collect::<Vec<_>>(),
                         );
+                    } else if let Some(default_block) = default_block {
+                        // If there are no symbol cases but there is a default (wildcard) transition
+                        builder.build_unconditional_branch(default_block);
+                    } else {
+                        // No transitions for this state, branch back to main_loop
+                        builder.build_unconditional_branch(main_loop);
                     }
                 }
-            }
-
-            if !symbol_cases.is_empty() {
-                let symbol_switch_block = context.append_basic_block(main_fn, &format!("state_{}_symbol_switch", state_int));
-                builder.position_at_end(state_block);
-                builder.build_unconditional_branch(symbol_switch_block);
-
-                builder.position_at_end(symbol_switch_block);
-
-                let default_symbol_block = default_block.unwrap_or_else(|| {
-                    // If there's no default transition, branch back to main_loop
-                    builder.position_at_end(state_block);
-                    builder.build_unconditional_branch(main_loop);
-                    main_loop
-                });
-
-                builder.build_switch(
-                    symbol_int,
-                    default_symbol_block,
-                    &symbol_cases
-                        .iter()
-                        .map(|(val, block)| (*val, *block))
-                        .collect::<Vec<_>>(),
-                );
-            } else if let Some(default_block) = default_block {
-                // If there are no symbol cases but there is a default (wildcard) transition
-                builder.build_unconditional_branch(default_block);
-            } else {
-                // No transitions for this state, branch back to main_loop
-                builder.build_unconditional_branch(main_loop);
-            }
-        }
-
-        // For states without any transitions (i.e., not in state_transitions)
-        for (&state_int, _) in state_blocks.iter().filter(|(&state_int, _)| !state_transitions.contains_key(&state_int)) {
-            let state_block = state_blocks[&state_int];
-            builder.position_at_end(state_block);
-            builder.build_unconditional_branch(main_loop);
-        }
 
         // Default state block
         builder.position_at_end(default_state_block);
@@ -357,6 +420,25 @@ impl ToLlvmIr for ParseTree {
 }
 
 impl ParseTree {
+	fn build_printf_call(
+        &self,
+        builder: &inkwell::builder::Builder,
+        printf_fn: &FunctionValue,
+        message: &str,
+    ) {
+        let print_format = builder
+            .build_global_string_ptr(message, "print_format")
+            .unwrap();
+        builder
+            .build_call(
+                *printf_fn,
+                &[print_format.as_pointer_value().into()],
+                "printf",
+            )
+            .unwrap();
+    }
+}
+
     fn perform_transition_steps(
         &self,
         builder: &inkwell::builder::Builder,
@@ -375,18 +457,33 @@ impl ParseTree {
     ) {
         let i32_type = context.i32_type();
         // Load current index value
-        let current_index = builder.build_load(i32_type, index_ptr, "current_index").unwrap().into_int_value();
+        let current_index = builder
+            .build_load(i32_type, index_ptr, "current_index")
+            .unwrap()
+            .into_int_value();
 
         for step in steps {
             match step {
                 TransitionStep::R => {
                     // Move tape head right
-                    let new_index = builder.build_int_add(current_index, i32_type.const_int(1, false), "new_index").unwrap();
+                    let new_index = builder
+                        .build_int_add(
+                            current_index,
+                            i32_type.const_int(1, false),
+                            "new_index",
+                        )
+                        .unwrap();
                     builder.build_store(index_ptr, new_index);
                 }
                 TransitionStep::L => {
                     // Move tape head left
-                    let new_index = builder.build_int_sub(current_index, i32_type.const_int(1, false), "new_index").unwrap();
+                    let new_index = builder
+                        .build_int_sub(
+                            current_index,
+                            i32_type.const_int(1, false),
+                            "new_index",
+                        )
+                        .unwrap();
                     builder.build_store(index_ptr, new_index);
                 }
                 TransitionStep::X => {
@@ -394,15 +491,21 @@ impl ParseTree {
                 }
                 TransitionStep::P(symbol) => {
                     // Print symbol
-                    let print_format = builder.build_global_string_ptr("Symbol: %c\n", "print_format").unwrap();
-                    builder.build_call(
-                        *printf_fn,
-                        &[
-                            print_format.as_pointer_value().into(),
-                            i8_type.const_int(symbol.as_bytes()[0] as u64, false).into(),
-                        ],
-                        "printf",
-                    );
+                    let print_format = builder
+                        .build_global_string_ptr("Symbol: %c\n", "print_format")
+                        .unwrap();
+                    builder
+                        .build_call(
+                            *printf_fn,
+                            &[
+                                print_format.as_pointer_value().into(),
+                                i8_type
+                                    .const_int(symbol.as_bytes()[0] as u64, false)
+                                    .into(),
+                            ],
+                            "printf",
+                        )
+                        .unwrap();
                 }
             }
         }
@@ -412,8 +515,13 @@ impl ParseTree {
         builder.build_store(state_ptr_alloca, new_state_int);
 
         // Increment step counter
-        let current_step = builder.build_load(i32_type, step_counter, "current_step").unwrap().into_int_value();
-        let next_step = builder.build_int_add(current_step, i32_type.const_int(1, false), "next_step").unwrap();
+        let current_step = builder
+            .build_load(i32_type, step_counter, "current_step")
+            .unwrap()
+            .into_int_value();
+        let next_step = builder
+            .build_int_add(current_step, i32_type.const_int(1, false), "next_step")
+            .unwrap();
         builder.build_store(step_counter, next_step);
 
         // Continue loop

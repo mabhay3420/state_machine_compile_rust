@@ -45,6 +45,14 @@ i.e. `0(1^n)` where `n` is from `0` to `infinity`.
 
 ## Usage
 
+The best way to get started is to use `nix` to install required packages.
+Assuming you can run `nix-shell` do this:
+
+``` bash
+nix-shell --pure # takes some time in the beginning
+cargo run_example
+```
+
 Clone the repository and run the following commands:
 
 1. Try with the [example.txt](example.txt) file:
@@ -61,16 +69,16 @@ Clone the repository and run the following commands:
    RUST_LOG=debug cargo run --bin state_machine_compiler_rust -- -i example.txt
    ```
 
-<details> 
-<summary>If you are working with executable, then refer to following doc 
-</summary> 
+<details>
+<summary>If you are working with executable, then refer to following doc
+</summary>
 
-```bash 
-Usage: state_machine_compiler_rust --input-file-path <INPUT_FILE_PATH> 
+```bash
+Usage: state_machine_compiler_rust --input-file-path <INPUT_FILE_PATH>
 
-Options: 
-   -i, --input-file-path <INPUT_FILE_PATH>  
-   -h, --help Print help 
+Options:
+   -i, --input-file-path <INPUT_FILE_PATH>
+   -h, --help Print help
 ```
 
 ## Output
@@ -119,7 +127,7 @@ Find the implementation [here](src/bin/state_machine_macro.rs).
 
 You can directly run the macro by running the following command:
    ```bash
-   cargo run --bin state_machine_macro 
+   cargo run --bin state_machine_macro
    ```
 
 If you want to see the expanded code, you can run the following command:
