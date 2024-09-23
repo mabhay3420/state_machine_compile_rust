@@ -15,14 +15,17 @@ pkgs.mkShell {
     # general setup
     pkgs.zsh              # Zsh shell
     pkgs.vim              # Vim editor
+    pkgs.coreutils        # the basic utilities - cat, ls, less etc.
     pkgs.which
-    pkgs.openssh
+    pkgs.openssh          # for ssh
+    pkgs.less             # git uses it :shock: and its not part of coreutils
 
     # For rustc compiler
-    pkgs.libffi           # libffi library
+    pkgs.libffi           # libffi library - rust uses ffi? or rustc does? I dunno
     pkgs.libxml2
 
 
+    # version control baby
     pkgs.git
   ];
 
@@ -48,6 +51,7 @@ pkgs.mkShell {
 
     # Confirmation message
     echo "✅ Fully reproducible development environment loaded with LLVM 18, LLDB 18, Rust, Zsh, Git and Vim!"
-    echo "Edit shell.nix and run `nix-shell --pure` to add new packages"
+    echo "🛠️  Edit 'shell.nix' and run 'nix-shell --pure' to add new packages"
   '';
+
 }
