@@ -1,0 +1,342 @@
+   Compiling state_machine_compiler_rust v0.1.0 (/Users/mabhay/projects/state_machine_compiler_rust)
+warning: use of deprecated method `inkwell::types::IntType::<'ctx>::ptr_type`: Starting from version 15.0, LLVM doesn't differentiate between pointer types. Use Context::ptr_type instead.
+  --> src/llvmconverter.rs:30:42
+   |
+30 |         let ptr_type = context.i8_type().ptr_type(AddressSpace::default());
+   |                                          ^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+
+error[E0308]: mismatched types
+    --> src/llvmconverter.rs:52:29
+     |
+52   |         builder.build_store(index_ptr, i32_type.const_int(0, false));
+     |                 ----------- ^^^^^^^^^ expected `PointerValue<'_>`, found `Result<PointerValue<'_>, ...>`
+     |                 |
+     |                 arguments to this method are incorrect
+     |
+     = note: expected struct `inkwell::values::PointerValue<'_>`
+                  found enum `Result<inkwell::values::PointerValue<'_>, BuilderError>`
+note: method defined here
+    --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/builder.rs:1364:12
+     |
+1364 |     pub fn build_store<V: BasicValue<'ctx>>(
+     |            ^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `Result<inkwell::values::PointerValue<'_>, BuilderError>` value, panicking if the value is a `Result::Err`
+     |
+52   |         builder.build_store(index_ptr.expect("REASON"), i32_type.const_int(0, false));
+     |                                      +++++++++++++++++
+
+error[E0599]: no method named `as_pointer_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:57:58
+    |
+57  |         builder.build_call(printf_fn, &[num_steps_prompt.as_pointer_value().into()], "printf");
+    |                                                          ^^^^^^^^^^^^^^^^ method not found in `Result<GlobalValue<'_>, BuilderError>`
+    |
+note: the method `as_pointer_value` exists on the type `GlobalValue<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/global_value.rs:236:5
+    |
+236 |     pub fn as_pointer_value(self) -> PointerValue<'ctx> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `GlobalValue<'_>` value, panicking if the value is a `Result::Err`
+    |
+57  |         builder.build_call(printf_fn, &[num_steps_prompt.expect("REASON").as_pointer_value().into()], "printf");
+    |                                                         +++++++++++++++++
+
+error[E0599]: no method named `as_pointer_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:58:53
+    |
+58  |         builder.build_call(scanf_fn, &[scanf_format.as_pointer_value().into(), num_steps_ptr.into()], "scanf");
+    |                                                     ^^^^^^^^^^^^^^^^ method not found in `Result<GlobalValue<'_>, BuilderError>`
+    |
+note: the method `as_pointer_value` exists on the type `GlobalValue<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/global_value.rs:236:5
+    |
+236 |     pub fn as_pointer_value(self) -> PointerValue<'ctx> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `GlobalValue<'_>` value, panicking if the value is a `Result::Err`
+    |
+58  |         builder.build_call(scanf_fn, &[scanf_format.expect("REASON").as_pointer_value().into(), num_steps_ptr.into()], "scanf");
+    |                                                    +++++++++++++++++
+
+error[E0599]: no method named `as_basic_value_enum` found for enum `Result` in the current scope
+  --> src/llvmconverter.rs:61:68
+   |
+61 | ...ad(i32_type, num_steps_ptr.as_basic_value_enum().into_pointer_value(), "num_steps").into_int_value();
+   |                               ^^^^^^^^^^^^^^^^^^^ method not found in `Result<PointerValue<'_>, BuilderError>`
+
+error[E0599]: no method named `into_int_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:61:125
+    |
+61  | ...inter_value(), "num_steps").into_int_value();
+    |                                ^^^^^^^^^^^^^^ method not found in `Result<BasicValueEnum<'_>, BuilderError>`
+    |
+note: the method `into_int_value` exists on the type `BasicValueEnum<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/enums.rs:305:5
+    |
+305 |     pub fn into_int_value(self) -> IntValue<'ctx> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `BasicValueEnum<'_>` value, panicking if the value is a `Result::Err`
+    |
+61  |         let num_steps = builder.build_load(i32_type, num_steps_ptr.as_basic_value_enum().into_pointer_value(), "num_steps").expect("REASON").into_int_value();
+    |                                                                                                                            +++++++++++++++++
+
+error[E0599]: no method named `as_pointer_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:65:57
+    |
+65  |         builder.build_call(printf_fn, &[arr_size_prompt.as_pointer_value().into()], "printf");
+    |                                                         ^^^^^^^^^^^^^^^^ method not found in `Result<GlobalValue<'_>, BuilderError>`
+    |
+note: the method `as_pointer_value` exists on the type `GlobalValue<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/global_value.rs:236:5
+    |
+236 |     pub fn as_pointer_value(self) -> PointerValue<'ctx> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `GlobalValue<'_>` value, panicking if the value is a `Result::Err`
+    |
+65  |         builder.build_call(printf_fn, &[arr_size_prompt.expect("REASON").as_pointer_value().into()], "printf");
+    |                                                        +++++++++++++++++
+
+error[E0599]: no method named `as_pointer_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:66:53
+    |
+66  |         builder.build_call(scanf_fn, &[scanf_format.as_pointer_value().into(), arr_size_ptr.into()], "scanf");
+    |                                                     ^^^^^^^^^^^^^^^^ method not found in `Result<GlobalValue<'_>, BuilderError>`
+    |
+note: the method `as_pointer_value` exists on the type `GlobalValue<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/global_value.rs:236:5
+    |
+236 |     pub fn as_pointer_value(self) -> PointerValue<'ctx> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `GlobalValue<'_>` value, panicking if the value is a `Result::Err`
+    |
+66  |         builder.build_call(scanf_fn, &[scanf_format.expect("REASON").as_pointer_value().into(), arr_size_ptr.into()], "scanf");
+    |                                                    +++++++++++++++++
+
+error[E0599]: no method named `as_basic_value_enum` found for enum `Result` in the current scope
+  --> src/llvmconverter.rs:69:66
+   |
+69 |         let arr_size = builder.build_load(i32_type, arr_size_ptr.as_basic_value_enum().into_pointer_value(), "arr_size").into_int_value();
+   |                                                                  ^^^^^^^^^^^^^^^^^^^ method not found in `Result<PointerValue<'_>, BuilderError>`
+
+error[E0599]: no method named `into_int_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:69:122
+    |
+69  |         let arr_size = builder.build_load(i32_type, arr_size_ptr.as_basic_value_enum().into_pointer_value(), "arr_size").into_int_value();
+    |                                                                                                                          ^^^^^^^^^^^^^^ method not found in `Result<BasicValueEnum<'_>, BuilderError>`
+    |
+note: the method `into_int_value` exists on the type `BasicValueEnum<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/enums.rs:305:5
+    |
+305 |     pub fn into_int_value(self) -> IntValue<'ctx> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `BasicValueEnum<'_>` value, panicking if the value is a `Result::Err`
+    |
+69  |         let arr_size = builder.build_load(i32_type, arr_size_ptr.as_basic_value_enum().into_pointer_value(), "arr_size").expect("REASON").into_int_value();
+    |                                                                                                                         +++++++++++++++++
+
+error[E0599]: no method named `try_as_basic_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:72:14
+    |
+70  |           let tape_ptr = builder
+    |  ________________________-
+71  | |             .build_call(malloc_fn, &[arr_size.into()], "tape_malloc")
+72  | |             .try_as_basic_value()
+    | |             -^^^^^^^^^^^^^^^^^^ method not found in `Result<CallSiteValue<'_>, BuilderError>`
+    | |_____________|
+    |
+    |
+note: the method `try_as_basic_value` exists on the type `CallSiteValue<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/call_site_value.rs:160:5
+    |
+160 |     pub fn try_as_basic_value(self) -> Either<BasicValueEnum<'ctx>, InstructionValue<'ctx>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `CallSiteValue<'_>` value, panicking if the value is a `Result::Err`
+    |
+71  |             .build_call(malloc_fn, &[arr_size.into()], "tape_malloc").expect("REASON")
+    |                                                                      +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/llvmconverter.rs:84:29
+     |
+84   |         builder.build_store(i, i32_type.const_int(0, false));
+     |                 ----------- ^ expected `PointerValue<'_>`, found `Result<PointerValue<'_>, ...>`
+     |                 |
+     |                 arguments to this method are incorrect
+     |
+     = note: expected struct `inkwell::values::PointerValue<'_>`
+                  found enum `Result<inkwell::values::PointerValue<'_>, BuilderError>`
+note: method defined here
+    --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/builder.rs:1364:12
+     |
+1364 |     pub fn build_store<V: BasicValue<'ctx>>(
+     |            ^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `Result<inkwell::values::PointerValue<'_>, BuilderError>` value, panicking if the value is a `Result::Err`
+     |
+84   |         builder.build_store(i.expect("REASON"), i32_type.const_int(0, false));
+     |                              +++++++++++++++++
+
+error[E0599]: no method named `as_basic_value_enum` found for enum `Result` in the current scope
+  --> src/llvmconverter.rs:89:52
+   |
+89 |         let i_val = builder.build_load(i32_type, i.as_basic_value_enum().into_pointer_value(), "i_val").into_int_value();
+   |                                                    ^^^^^^^^^^^^^^^^^^^ method not found in `Result<PointerValue<'_>, BuilderError>`
+
+error[E0599]: no method named `into_int_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:89:105
+    |
+89  |         let i_val = builder.build_load(i32_type, i.as_basic_value_enum().into_pointer_value(), "i_val").into_int_value();
+    |                                                                                                         ^^^^^^^^^^^^^^ method not found in `Result<BasicValueEnum<'_>, BuilderError>`
+    |
+note: the method `into_int_value` exists on the type `BasicValueEnum<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/enums.rs:305:5
+    |
+305 |     pub fn into_int_value(self) -> IntValue<'ctx> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `BasicValueEnum<'_>` value, panicking if the value is a `Result::Err`
+    |
+89  |         let i_val = builder.build_load(i32_type, i.as_basic_value_enum().into_pointer_value(), "i_val").expect("REASON").into_int_value();
+    |                                                                                                        +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/llvmconverter.rs:96:29
+     |
+96   |         builder.build_store(element_ptr, i8_type.const_int('X' as u64, false));
+     |                 ----------- ^^^^^^^^^^^ expected `PointerValue<'_>`, found `Result<PointerValue<'_>, ...>`
+     |                 |
+     |                 arguments to this method are incorrect
+     |
+     = note: expected struct `inkwell::values::PointerValue<'_>`
+                  found enum `Result<inkwell::values::PointerValue<'_>, BuilderError>`
+note: method defined here
+    --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/builder.rs:1364:12
+     |
+1364 |     pub fn build_store<V: BasicValue<'ctx>>(
+     |            ^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `Result<inkwell::values::PointerValue<'_>, BuilderError>` value, panicking if the value is a `Result::Err`
+     |
+96   |         builder.build_store(element_ptr.expect("REASON"), i8_type.const_int('X' as u64, false));
+     |                                        +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/llvmconverter.rs:98:29
+     |
+98   |         builder.build_store(i, next_i);
+     |                 ----------- ^ expected `PointerValue<'_>`, found `Result<PointerValue<'_>, ...>`
+     |                 |
+     |                 arguments to this method are incorrect
+     |
+     = note: expected struct `inkwell::values::PointerValue<'_>`
+                  found enum `Result<inkwell::values::PointerValue<'_>, BuilderError>`
+note: method defined here
+    --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/builder.rs:1364:12
+     |
+1364 |     pub fn build_store<V: BasicValue<'ctx>>(
+     |            ^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `Result<inkwell::values::PointerValue<'_>, BuilderError>` value, panicking if the value is a `Result::Err`
+     |
+98   |         builder.build_store(i.expect("REASON"), next_i);
+     |                              +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/llvmconverter.rs:109:29
+     |
+109  |         builder.build_store(i, i32_type.const_int(0, false));
+     |                 ----------- ^ expected `PointerValue<'_>`, found `Result<PointerValue<'_>, ...>`
+     |                 |
+     |                 arguments to this method are incorrect
+     |
+     = note: expected struct `inkwell::values::PointerValue<'_>`
+                  found enum `Result<inkwell::values::PointerValue<'_>, BuilderError>`
+note: method defined here
+    --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/builder.rs:1364:12
+     |
+1364 |     pub fn build_store<V: BasicValue<'ctx>>(
+     |            ^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `Result<inkwell::values::PointerValue<'_>, BuilderError>` value, panicking if the value is a `Result::Err`
+     |
+109  |         builder.build_store(i.expect("REASON"), i32_type.const_int(0, false));
+     |                              +++++++++++++++++
+
+error[E0599]: no method named `as_basic_value_enum` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:114:58
+    |
+114 |         let i_val_print = builder.build_load(i32_type, i.as_basic_value_enum().into_pointer_value(), "i_val_print").into_int_value();
+    |                                                          ^^^^^^^^^^^^^^^^^^^ method not found in `Result<PointerValue<'_>, BuilderError>`
+
+error[E0599]: no method named `into_int_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:114:117
+    |
+114 |         let i_val_print = builder.build_load(i32_type, i.as_basic_value_enum().into_pointer_value(), "i_val_print").into_int_value();
+    |                                                                                                                     ^^^^^^^^^^^^^^ method not found in `Result<BasicValueEnum<'_>, BuilderError>`
+    |
+note: the method `into_int_value` exists on the type `BasicValueEnum<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/enums.rs:305:5
+    |
+305 |     pub fn into_int_value(self) -> IntValue<'ctx> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `BasicValueEnum<'_>` value, panicking if the value is a `Result::Err`
+    |
+114 |         let i_val_print = builder.build_load(i32_type, i.as_basic_value_enum().into_pointer_value(), "i_val_print").expect("REASON").into_int_value();
+    |                                                                                                                    +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/llvmconverter.rs:121:55
+     |
+121  |         let element_val = builder.build_load(i8_type, element_ptr_print, "element_val");
+     |                                   ----------          ^^^^^^^^^^^^^^^^^ expected `PointerValue<'_>`, found `Result<PointerValue<'_>, ...>`
+     |                                   |
+     |                                   arguments to this method are incorrect
+     |
+     = note: expected struct `inkwell::values::PointerValue<'_>`
+                  found enum `Result<inkwell::values::PointerValue<'_>, BuilderError>`
+note: method defined here
+    --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/builder.rs:1446:12
+     |
+1446 |     pub fn build_load<T: BasicType<'ctx>>(
+     |            ^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `Result<inkwell::values::PointerValue<'_>, BuilderError>` value, panicking if the value is a `Result::Err`
+     |
+121  |         let element_val = builder.build_load(i8_type, element_ptr_print.expect("REASON"), "element_val");
+     |                                                                        +++++++++++++++++
+
+error[E0599]: no method named `as_pointer_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:123:60
+    |
+123 |         builder.build_call(printf_fn, &[print_array_format.as_pointer_value().into(), element_val.into()], "printf");
+    |                                                            ^^^^^^^^^^^^^^^^ method not found in `Result<GlobalValue<'_>, BuilderError>`
+    |
+note: the method `as_pointer_value` exists on the type `GlobalValue<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/global_value.rs:236:5
+    |
+236 |     pub fn as_pointer_value(self) -> PointerValue<'ctx> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `GlobalValue<'_>` value, panicking if the value is a `Result::Err`
+    |
+123 |         builder.build_call(printf_fn, &[print_array_format.expect("REASON").as_pointer_value().into(), element_val.into()], "printf");
+    |                                                           +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/llvmconverter.rs:125:29
+     |
+125  |         builder.build_store(i, next_i_print);
+     |                 ----------- ^ expected `PointerValue<'_>`, found `Result<PointerValue<'_>, ...>`
+     |                 |
+     |                 arguments to this method are incorrect
+     |
+     = note: expected struct `inkwell::values::PointerValue<'_>`
+                  found enum `Result<inkwell::values::PointerValue<'_>, BuilderError>`
+note: method defined here
+    --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/builder.rs:1364:12
+     |
+1364 |     pub fn build_store<V: BasicValue<'ctx>>(
+     |            ^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `Result<inkwell::values::PointerValue<'_>, BuilderError>` value, panicking if the value is a `Result::Err`
+     |
+125  |         builder.build_store(i.expect("REASON"), next_i_print);
+     |                              +++++++++++++++++
+
+Some errors have detailed explanations: E0308, E0599.
+For more information about an error, try `rustc --explain E0308`.
+warning: `state_machine_compiler_rust` (lib) generated 1 warning
+error: could not compile `state_machine_compiler_rust` (lib) due to 21 previous errors; 1 warning emitted
