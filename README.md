@@ -142,3 +142,13 @@ If you want to see the expanded code, you can run the following command:
 - [Writing a compiler in python](https://austinhenley.com/blog/teenytinycompiler1.html)
 - [Rust Book](https://doc.rust-lang.org/book/ch19-06-macros.html)
 - [Claude](https://claude.ai/)
+
+
+## Editor Setup
+1. I am developing the project inside a nix shell environment in VS code editor. The main advantage is i don't need to play around with LLVM installations. Here are the steps:
+   a. Install `nix`. Make sure you can run `nix-shell --pure` in your terminal.
+   b. Install `Nix Environment Selector` [extension](https://marketplace.visualstudio.com/items?itemName=arrterian.nix-env-selector) in VS code.
+   c. In VS Code, On command pallete ( cmd + shift + p ) type `Nix-Env: Select Environment` and select `shell.nix` as the environment.
+2. Otherwise, you will need to install LLVM 18 and have it in your path. The errors will point you to the right direction.
+
+ 
