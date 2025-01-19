@@ -1,0 +1,5175 @@
+
+================================================================================
+File: Cargo.toml
+================================================================================
+
+[package]
+name = "state_machine_compiler_rust"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+
+[dependencies]
+clap = { version = "4.0", features = ["derive"] }
+env_logger = "0.11.3"
+log = "0.4.21"
+inkwell = { version = "0.5.0", features = ["llvm18-0"] }
+================================================================================
+File: .DS_Store (SKIPPED - Binary/Non-text file)
+================================================================================
+
+
+================================================================================
+File: state_machine.ll
+================================================================================
+
+; ModuleID = 'tape_machine_fixed'
+source_filename = "tape_machine_fixed"
+target triple = "arm64-apple-macosx13.0.0"
+
+@num_steps_prompt = private unnamed_addr constant [24 x i8] c"Enter number of steps: \00", align 1
+@scanf_format = private unnamed_addr constant [3 x i8] c"%d\00", align 1
+@arr_size_prompt = private unnamed_addr constant [19 x i8] c"Enter array size: \00", align 1
+@print_format = private unnamed_addr constant [12 x i8] c"Symbol: %c\0A\00", align 1
+@print_array_format = private unnamed_addr constant [4 x i8] c"%c 0", align 1  ; Format for printing array symbols
+
+; External function declarations
+declare i32 @printf(ptr, ...)
+declare ptr @malloc(i32)
+declare i32 @scanf(ptr, ...)
+
+define i32 @main() {
+entry:
+  ; Allocate variables
+  %num_steps = alloca i32, align 4  ; Allocate memory for the number of steps
+  %arr_size = alloca i32, align 4   ; Allocate memory for the array size
+  %index = alloca i32, align 4      ; Allocate memory for the current index
+  %i = alloca i32, align 4          ; Allocate memory for loop variable i
+  %state_ptr = alloca i32, align 4  ; Allocate memory for the current state
+  %step_counter = alloca i32, align 4 ; Allocate memory for the step counter
+  %symbol_int = alloca i32, align 4 ; Allocate memory for the symbol integer
+
+  ; Initialize index, step counter, and state
+  store i32 0, ptr %index, align 4       ; Initialize index to 0
+  store i32 0, ptr %step_counter, align 4 ; Initialize step counter to 0
+  store i32 0, ptr %state_ptr, align 4   ; Initialize state to 0
+
+  ; Prompt for number of steps
+  %printf = call i32 (ptr, ...) @printf(ptr @num_steps_prompt)  ; Print prompt for number of steps
+  %scanf = call i32 (ptr, ...) @scanf(ptr @scanf_format, ptr %num_steps)  ; Read number of steps
+  %num_steps1 = load i32, ptr %num_steps, align 4  ; Load the number of steps
+
+  ; Prompt for array size
+  %printf2 = call i32 (ptr, ...) @printf(ptr @arr_size_prompt)  ; Print prompt for array size
+  %scanf3 = call i32 (ptr, ...) @scanf(ptr @scanf_format, ptr %arr_size)  ; Read array size
+  %arr_size4 = load i32, ptr %arr_size, align 4  ; Load the array size
+
+  ; Check if array size is positive
+  %is_positive = icmp sgt i32 %arr_size4, 0  ; Check if array size is greater than 0
+  br i1 %is_positive, label %allocate_memory, label %error_exit  ; Branch based on the result
+
+allocate_memory:
+  ; Allocate tape memory
+  %tape_malloc = call ptr @malloc(i32 %arr_size4)  ; Allocate memory for the tape
+  %tape = bitcast ptr %tape_malloc to ptr          ; Cast the allocated memory to an opaque pointer
+
+  ; Initialize tape with 'X'
+  store i32 0, ptr %i, align 4  ; Initialize loop variable i to 0
+  br label %init_loop
+
+init_loop:
+  %i_val = load i32, ptr %i, align 4  ; Load the current value of i
+  %init_cond = icmp ult i32 %i_val, %arr_size4  ; Check if i is less than the array size
+  br i1 %init_cond, label %init_loop_body, label %init_loop_end  ; Branch based on the result
+
+init_loop_body:
+  %element_ptr = getelementptr i8, ptr %tape, i32 %i_val  ; Get the pointer to the current element in the tape
+  store i8 88, ptr %element_ptr, align 1  ; Store 'X' (ASCII 88) in the current element
+  %next_i = add i32 %i_val, 1  ; Increment i by 1
+  store i32 %next_i, ptr %i, align 4  ; Store the updated value of i
+  br label %init_loop
+
+init_loop_end:
+  ; Main loop for tape machine
+  br label %main_loop
+
+main_loop:
+  %current_step = load i32, ptr %step_counter, align 4  ; Load the current step count
+  %continue_loop = icmp ult i32 %current_step, %num_steps1  ; Check if the current step is less than the total steps
+  br i1 %continue_loop, label %main_loop_body, label %main_loop_end  ; Branch based on the result
+
+main_loop_body:
+  %current_state = load i32, ptr %state_ptr, align 4  ; Load the current state
+  %current_index = load i32, ptr %index, align 4  ; Load the current index
+
+  ; Bounds check for index
+  %in_bounds = icmp uge i32 %current_index, 0  ; Check if index is greater than or equal to 0
+  %within_size = icmp ult i32 %current_index, %arr_size4  ; Check if index is less than the array size
+  %valid_index = and i1 %in_bounds, %within_size  ; Combine both conditions to ensure index is valid
+  br i1 %valid_index, label %valid_index_body, label %error_exit  ; Branch based on the result
+
+valid_index_body:
+  %current_symbol_ptr = getelementptr i8, ptr %tape, i32 %current_index  ; Get the pointer to the current symbol in the tape
+  %current_symbol = load i8, ptr %current_symbol_ptr, align 1  ; Load the current symbol
+
+  ; Handle different symbols
+  switch i8 %current_symbol, label %symbol_default [
+    i8 88, label %symbol_case_1  ; 'X'
+    i8 120, label %symbol_case_2 ; 'x'
+    i8 101, label %symbol_case_3 ; 'e'
+    i8 48, label %symbol_case_4  ; '0'
+    i8 49, label %symbol_case_5  ; '1'
+  ]
+
+symbol_case_1:
+  store i32 1, ptr %symbol_int, align 4  ; Set symbol_int to 1 for 'X'
+  br label %update_step
+
+symbol_case_2:
+  store i32 2, ptr %symbol_int, align 4  ; Set symbol_int to 2 for 'x'
+  br label %update_step
+
+symbol_case_3:
+  store i32 3, ptr %symbol_int, align 4  ; Set symbol_int to 3 for 'e'
+  br label %update_step
+
+symbol_case_4:
+  store i32 0, ptr %symbol_int, align 4  ; Set symbol_int to 0 for '0'
+  br label %update_step
+
+symbol_case_5:
+  store i32 4, ptr %symbol_int, align 4  ; Set symbol_int to 4 for '1'
+  br label %update_step
+
+symbol_default:
+  store i32 -1, ptr %symbol_int, align 4  ; Set symbol_int to -1 for unknown symbols
+  br label %update_step
+
+update_step:
+  ; Update the step counter and continue loop
+  %current_step8 = load i32, ptr %step_counter, align 4  ; Load the current step count
+  %next_step = add i32 %current_step8, 1  ; Increment the step count by 1
+  store i32 %next_step, ptr %step_counter, align 4  ; Store the updated step count
+  br label %main_loop
+
+main_loop_end:
+  ; Print the final state of the tape array
+  store i32 0, ptr %i, align 4  ; Initialize loop variable i to 0
+  br label %print_loop
+
+print_loop:
+  %i_val_print = load i32, ptr %i, align 4  ; Load the current value of i
+  %print_cond = icmp ult i32 %i_val_print, %arr_size4  ; Check if i is less than the array size
+  br i1 %print_cond, label %print_loop_body, label %print_loop_end  ; Branch based on the result
+
+print_loop_body:
+  %element_ptr_print = getelementptr i8, ptr %tape, i32 %i_val_print  ; Get the pointer to the current element in the tape
+  %element_val = load i8, ptr %element_ptr_print, align 1  ; Load the current element value
+  call i32 (ptr, ...) @printf(ptr @print_array_format, i8 %element_val)  ; Print the element value
+  %next_i_print = add i32 %i_val_print, 1  ; Increment i by 1
+  store i32 %next_i_print, ptr %i, align 4  ; Store the updated value of i
+  br label %print_loop
+
+print_loop_end:
+  ret i32 0  ; Return 0 to indicate successful execution
+
+error_exit:
+  ; Print error message and exit
+  %error_msg = call i32 (ptr, ...) @printf(ptr @print_format, i8 69) ; Print 'E' for error
+  ret i32 -1  ; Return -1 to indicate an error
+}
+
+================================================================================
+File: init.sh
+================================================================================
+
+nix-shell --pure
+
+================================================================================
+File: shell.nix
+================================================================================
+
+# shell.nix
+{ pkgs ? import <nixpkgs> {} }:
+
+pkgs.mkShell {
+  # Specify the packages to include in the environment
+  buildInputs = [
+
+    # this project
+    pkgs.llvm_18          # LLVM version 18
+    pkgs.lldb_18          # LLDB debugger for LLVM 18
+    pkgs.rustc            # Rust compiler
+    pkgs.cargo            # Rust package manager
+    pkgs.rust-analyzer    # Rust language server (optional)
+
+    # general setup
+    pkgs.zsh              # Zsh shell
+    pkgs.vim              # Vim editor
+    pkgs.coreutils        # the basic utilities - cat, ls, less etc.
+    pkgs.which
+    pkgs.openssh          # for ssh
+    pkgs.less             # git uses it :shock: and its not part of coreutils
+
+    # For rustc compiler
+    pkgs.libffi           # libffi library - rust uses ffi? or rustc does? I dunno
+    pkgs.libxml2
+
+
+    # version control baby
+    pkgs.git
+  ];
+
+  # Define environment variables and shell configurations
+  shellHook = ''
+    # Set environment variables
+    # export LLVM_SOURCE_DIR="/Users/mabhay/projects/llvm-project-llvmorg-18.1.8"
+
+    echo ">> Going to use vim in shell - change this if you don't like that"
+    # Use Vi keybindings in Zsh
+    set -o vi
+
+    # Preferred editor for local and remote sessions
+    if [[ -n $SSH_CONNECTION ]]; then
+      export EDITOR='vim'
+    else
+      export EDITOR='mvim'
+    fi
+
+    # Optional: Set Rust backtrace for better error messages
+    # export RUST_BACKTRACE=1
+
+    # Confirmation message
+    echo "🛠️  Edit 'shell.nix' and run 'nix-shell --pure' to add new packages"
+    echo "✅ Fully reproducible development environment loaded with LLVM 18, LLDB 18, Rust, Git and Vim!"
+  '';
+
+}
+
+================================================================================
+File: Cargo.lock
+================================================================================
+
+# This file is automatically @generated by Cargo.
+# It is not intended for manual editing.
+version = 3
+
+[[package]]
+name = "aho-corasick"
+version = "1.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e60d3430d3a69478ad0993f19238d2df97c507009a52b3c10addcd7f6bcb916"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
+name = "anstream"
+version = "0.6.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64e15c1ab1f89faffbf04a634d5e1962e9074f2741eef6d97f3c4e322426d526"
+dependencies = [
+ "anstyle",
+ "anstyle-parse",
+ "anstyle-query",
+ "anstyle-wincon",
+ "colorchoice",
+ "is_terminal_polyfill",
+ "utf8parse",
+]
+
+[[package]]
+name = "anstyle"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1bec1de6f59aedf83baf9ff929c98f2ad654b97c9510f4e70cf6f661d49fd5b1"
+
+[[package]]
+name = "anstyle-parse"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb47de1e80c2b463c735db5b217a0ddc39d612e7ac9e2e96a5aed1f57616c1cb"
+dependencies = [
+ "utf8parse",
+]
+
+[[package]]
+name = "anstyle-query"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d36fc52c7f6c869915e99412912f22093507da8d9e942ceaf66fe4b7c14422a"
+dependencies = [
+ "windows-sys",
+]
+
+[[package]]
+name = "anstyle-wincon"
+version = "3.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bf74e1b6e971609db8ca7a9ce79fd5768ab6ae46441c572e46cf596f59e57f8"
+dependencies = [
+ "anstyle",
+ "windows-sys",
+]
+
+[[package]]
+name = "anyhow"
+version = "1.0.89"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86fdf8605db99b54d3cd748a44c6d04df638eb5dafb219b135d0149bd0db01f6"
+
+[[package]]
+name = "cc"
+version = "1.1.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07b1695e2c7e8fc85310cde85aeaab7e3097f593c91d209d3f9df76c928100f0"
+dependencies = [
+ "shlex",
+]
+
+[[package]]
+name = "clap"
+version = "4.5.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0956a43b323ac1afaffc053ed5c4b7c1f1800bacd1683c353aabbb752515dd3"
+dependencies = [
+ "clap_builder",
+ "clap_derive",
+]
+
+[[package]]
+name = "clap_builder"
+version = "4.5.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d72166dd41634086d5803a47eb71ae740e61d84709c36f3c34110173db3961b"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "clap_lex",
+ "strsim",
+]
+
+[[package]]
+name = "clap_derive"
+version = "4.5.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ac6a0c7b1a9e9a5186361f67dfa1b88213572f427fb9ab038efb2bd8c582dab"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "clap_lex"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1462739cb27611015575c0c11df5df7601141071f07518d56fcc1be504cbec97"
+
+[[package]]
+name = "colorchoice"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3fd119d74b830634cea2a0f58bbd0d54540518a14397557951e79340abc28c0"
+
+[[package]]
+name = "either"
+version = "1.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
+
+[[package]]
+name = "env_filter"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f2c92ceda6ceec50f43169f9ee8424fe2db276791afde7b2cd8bc084cb376ab"
+dependencies = [
+ "log",
+ "regex",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.11.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e13fa619b91fb2381732789fc5de83b45675e882f66623b7d8cb4f643017018d"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "env_filter",
+ "humantime",
+ "log",
+]
+
+[[package]]
+name = "heck"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+
+[[package]]
+name = "humantime"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
+
+[[package]]
+name = "inkwell"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40fb405537710d51f6bdbc8471365ddd4cd6d3a3c3ad6e0c8291691031ba94b2"
+dependencies = [
+ "either",
+ "inkwell_internals",
+ "libc",
+ "llvm-sys",
+ "once_cell",
+ "thiserror",
+]
+
+[[package]]
+name = "inkwell_internals"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9dd28cfd4cfba665d47d31c08a6ba637eed16770abca2eccbbc3ca831fef1e44"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "is_terminal_polyfill"
+version = "1.70.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7943c866cc5cd64cbc25b2e01621d07fa8eb2a1a23160ee81ce38704e97b8ecf"
+
+[[package]]
+name = "lazy_static"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
+
+[[package]]
+name = "libc"
+version = "0.2.158"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8adc4bb1803a324070e64a98ae98f38934d91957a99cfb3a43dcbc01bc56439"
+
+[[package]]
+name = "llvm-sys"
+version = "180.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "778fa5fa02e32728e718f11eec147e6f134137399ab02fd2c13d32476337affa"
+dependencies = [
+ "anyhow",
+ "cc",
+ "lazy_static",
+ "libc",
+ "regex-lite",
+ "semver",
+]
+
+[[package]]
+name = "log"
+version = "0.4.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
+
+[[package]]
+name = "memchr"
+version = "2.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
+
+[[package]]
+name = "once_cell"
+version = "1.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
+
+[[package]]
+name = "proc-macro2"
+version = "1.0.86"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e719e8df665df0d1c8fbfd238015744736151d4445ec0836b8e628aae103b77"
+dependencies = [
+ "unicode-ident",
+]
+
+[[package]]
+name = "quote"
+version = "1.0.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5b9d34b8991d19d98081b46eacdd8eb58c6f2b201139f7c5f643cc155a633af"
+dependencies = [
+ "proc-macro2",
+]
+
+[[package]]
+name = "regex"
+version = "1.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4219d74c6b67a3654a9fbebc4b419e22126d13d2f3c4a07ee0cb61ff79a79619"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
+name = "regex-automata"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38caf58cc5ef2fed281f89292ef23f6365465ed9a41b7a7754eb4e26496c92df"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-syntax",
+]
+
+[[package]]
+name = "regex-lite"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "53a49587ad06b26609c52e423de037e7f57f20d53535d66e08c695f347df952a"
+
+[[package]]
+name = "regex-syntax"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a66a03ae7c801facd77a29370b4faec201768915ac14a721ba36f20bc9c209b"
+
+[[package]]
+name = "semver"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61697e0a1c7e512e84a621326239844a24d8207b4669b41bc18b32ea5cbf988b"
+
+[[package]]
+name = "shlex"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
+
+[[package]]
+name = "state_machine_compiler_rust"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "env_logger",
+ "inkwell",
+ "log",
+]
+
+[[package]]
+name = "strsim"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+
+[[package]]
+name = "syn"
+version = "2.0.77"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f35bcdf61fd8e7be6caf75f429fdca8beb3ed76584befb503b1569faee373ed"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
+
+[[package]]
+name = "thiserror"
+version = "1.0.64"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d50af8abc119fb8bb6dbabcfa89656f46f84aa0ac7688088608076ad2b459a84"
+dependencies = [
+ "thiserror-impl",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "1.0.64"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08904e7672f5eb876eaaf87e0ce17857500934f4981c4a0ab2b4aa98baac7fc3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "unicode-ident"
+version = "1.0.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e91b56cd4cadaeb79bbf1a5645f6b4f8dc5bde8834ad5894a8db35fda9efa1fe"
+
+[[package]]
+name = "utf8parse"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
+
+[[package]]
+name = "windows-sys"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
+dependencies = [
+ "windows-targets",
+]
+
+[[package]]
+name = "windows-targets"
+version = "0.52.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b724f72796e036ab90c1021d4780d4d3d648aca59e491e6b98e725b84e99973"
+dependencies = [
+ "windows_aarch64_gnullvm",
+ "windows_aarch64_msvc",
+ "windows_i686_gnu",
+ "windows_i686_gnullvm",
+ "windows_i686_msvc",
+ "windows_x86_64_gnu",
+ "windows_x86_64_gnullvm",
+ "windows_x86_64_msvc",
+]
+
+[[package]]
+name = "windows_aarch64_gnullvm"
+version = "0.52.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32a4622180e7a0ec044bb555404c800bc9fd9ec262ec147edd5989ccd0c02cd3"
+
+[[package]]
+name = "windows_aarch64_msvc"
+version = "0.52.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09ec2a7bb152e2252b53fa7803150007879548bc709c039df7627cabbd05d469"
+
+[[package]]
+name = "windows_i686_gnu"
+version = "0.52.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e9b5ad5ab802e97eb8e295ac6720e509ee4c243f69d781394014ebfe8bbfa0b"
+
+[[package]]
+name = "windows_i686_gnullvm"
+version = "0.52.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0eee52d38c090b3caa76c563b86c3a4bd71ef1a819287c19d586d7334ae8ed66"
+
+[[package]]
+name = "windows_i686_msvc"
+version = "0.52.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "240948bc05c5e7c6dabba28bf89d89ffce3e303022809e73deaefe4f6ec56c66"
+
+[[package]]
+name = "windows_x86_64_gnu"
+version = "0.52.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "147a5c80aabfbf0c7d901cb5895d1de30ef2907eb21fbbab29ca94c5b08b1a78"
+
+[[package]]
+name = "windows_x86_64_gnullvm"
+version = "0.52.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24d5b23dc417412679681396f2b49f3de8c1473deb516bd34410872eff51ed0d"
+
+[[package]]
+name = "windows_x86_64_msvc"
+version = "0.52.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
+
+================================================================================
+File: README.md
+================================================================================
+
+# State Machine Compiler
+
+A compiler for state machines written in Rust.
+
+Read about it on [Blog](https://mabhay3420.github.io/2024-05-07-state-machine-compiler-a-small-language/)
+
+## Syntax Details
+
+Look at the example below:
+
+```
+STATES: [b], o, q, p, f
+
+SYMBOLS: 0, 1, e, x
+
+TRANSITIONS:
+b, *, P(e)-R-P(e)-R-P(0)-R-R-P(0)-L-L, o
+o, 1, R-P(x)-L-L-L, o
+o, 0, X, q
+q, 0 | 1, R-R, q
+q, X, P(1)-L, p
+p, x, P(X)-R, q
+p, e, R, f
+p, X, L-L, p
+f, *, R-R, f
+f, X, P(0)-L-L, o
+```
+
+This state machine when run will generate following output:
+
+```
+001011011101111....
+```
+
+i.e. `0(1^n)` where `n` is from `0` to `infinity`.
+
+### Rules
+
+1. Each statement should be in a newline.
+2. Each transition is in a newline.
+3. `[b]` -> `b` is the initial state.
+4. Action `X` means do nothing.
+5. Print `X` amounts to erasing the content of the current head.
+6. Condition `*` means that the transition will happen irrespective of the current symbol, but it cannot be empty.
+
+## Usage
+
+The best way to get started is to use `nix` to install required packages.
+Assuming you can run `nix-shell` do this:
+
+``` bash
+nix-shell --pure # takes some time in the beginning
+cargo run_example
+```
+
+Clone the repository and run the following commands:
+
+1. Try with the [example.txt](example.txt) file:
+
+   ```bash
+   cargo run --bin state_machine_compiler_rust -- -i example.txt
+   ```
+
+2. Alternatively, pass the file path as an argument following the `-i` flag.
+
+3. To enable debug logging, set the `RUST_LOG` environment variable to `debug`.
+
+   ```bash
+   RUST_LOG=debug cargo run --bin state_machine_compiler_rust -- -i example.txt
+   ```
+
+<details>
+<summary>If you are working with executable, then refer to following doc
+</summary>
+
+```bash
+Usage: state_machine_compiler_rust --input-file-path <INPUT_FILE_PATH>
+
+Options:
+   -i, --input-file-path <INPUT_FILE_PATH>
+   -h, --help Print help
+```
+
+## Output
+
+Two files:
+
+1. `src/bin/state_machine.rs`
+
+   To test the the generated Rust code: `cargo run --bin state_machine`
+
+   Inputs:
+
+   - `num_steps` - The number of steps to run the state machine.
+   - `max_len` - The maximum length of the tape.
+
+   Outputs:
+
+   - The transitions
+   - The full tape content
+   - The cleaned tape content ( erasing the `X` symbol which stands for empty tape content)
+
+2. `state_machine.dot` is the state machine diagram.
+
+</details>
+
+## Implementation
+
+1. Parse the input file and generate the state machine. The data is stored in a `ParseTree` struct.
+
+   ```rust
+   struct ParseTree {
+      states: Vec<String>,
+      initial_state: String,
+      symbols: Vec<String>,
+      transitions: Vec<Transition>,
+   }
+   ```
+
+2. Generate the Rust code for the state machine.
+
+## Implementation via Rust Macros
+
+Instead of building a custom language, we can also use Rust macros to generate the code. However, due to some limitations of macros, the approach is a little verbose.
+
+Find the implementation [here](src/bin/state_machine_macro.rs).
+
+You can directly run the macro by running the following command:
+   ```bash
+   cargo run --bin state_machine_macro
+   ```
+
+If you want to see the expanded code, you can run the following command:
+   ```bash
+   rustc +nightly -Zunpretty=expanded src/bin/state_machine_macro.rs
+   ```
+
+
+## References
+
+- Inspired from discussion in [Alan Turing's 1936 paper](https://www.cs.virginia.edu/~robins/Turing_Paper_1936.pdf).
+- [Writing a compiler in python](https://austinhenley.com/blog/teenytinycompiler1.html)
+- [Rust Book](https://doc.rust-lang.org/book/ch19-06-macros.html)
+- [Claude](https://claude.ai/)
+
+================================================================================
+File: .gitignore
+================================================================================
+
+/target
+.DS_Store
+================================================================================
+File: state_machine.dot
+================================================================================
+
+digraph {
+                rankdir=LR;
+                labelloc="t";
+                node [shape=circle, style=filled, fillcolor=lightblue, fontname="Arial"];
+                edge [fontcolor=blue, fontname="Arial"];
+                  "b" [shape=doublecircle, fillcolor=lightgreen, width=1.5, height=1.5];   "o" [shape=circle, fillcolor=lightblue, width=1.2, height=1.2];   "q" [shape=circle, fillcolor=lightblue, width=1.2, height=1.2];   "p" [shape=circle, fillcolor=lightblue, width=1.2, height=1.2];   "f" [shape=circle, fillcolor=lightblue, width=1.2, height=1.2];   "b" -> "o" [label="* / P(e)-R-P(e)-R-P(0)-R-R-P(0)-L-L", color=black];
+  "o" -> "o" [label="[1] / R-P(x)-L-L-L", color=black];
+  "o" -> "q" [label="[0] / X", color=black];
+  "q" -> "q" [label="[0,1] / R-R", color=black];
+  "q" -> "p" [label="[X] / P(1)-L", color=black];
+  "p" -> "q" [label="[x] / P(X)-R", color=black];
+  "p" -> "f" [label="[e] / R", color=black];
+  "p" -> "p" [label="[X] / L-L", color=black];
+  "f" -> "f" [label="* / R-R", color=black];
+  "f" -> "o" [label="[X] / P(0)-L-L", color=black];
+ } 
+================================================================================
+File: output.txt
+================================================================================
+
+
+================================================================================
+File: Cargo.toml
+================================================================================
+
+[package]
+name = "state_machine_compiler_rust"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+
+[dependencies]
+clap = { version = "4.0", features = ["derive"] }
+env_logger = "0.11.3"
+log = "0.4.21"
+inkwell = { version = "0.5.0", features = ["llvm18-0"] }
+================================================================================
+File: .DS_Store (SKIPPED - Binary/Non-text file)
+================================================================================
+
+
+================================================================================
+File: state_machine.ll
+================================================================================
+
+; ModuleID = 'tape_machine_fixed'
+source_filename = "tape_machine_fixed"
+target triple = "arm64-apple-macosx13.0.0"
+
+@num_steps_prompt = private unnamed_addr constant [24 x i8] c"Enter number of steps: \00", align 1
+@scanf_format = private unnamed_addr constant [3 x i8] c"%d\00", align 1
+@arr_size_prompt = private unnamed_addr constant [19 x i8] c"Enter array size: \00", align 1
+@print_format = private unnamed_addr constant [12 x i8] c"Symbol: %c\0A\00", align 1
+@print_array_format = private unnamed_addr constant [4 x i8] c"%c 0", align 1  ; Format for printing array symbols
+
+; External function declarations
+declare i32 @printf(ptr, ...)
+declare ptr @malloc(i32)
+declare i32 @scanf(ptr, ...)
+
+define i32 @main() {
+entry:
+  ; Allocate variables
+  %num_steps = alloca i32, align 4  ; Allocate memory for the number of steps
+  %arr_size = alloca i32, align 4   ; Allocate memory for the array size
+  %index = alloca i32, align 4      ; Allocate memory for the current index
+  %i = alloca i32, align 4          ; Allocate memory for loop variable i
+  %state_ptr = alloca i32, align 4  ; Allocate memory for the current state
+  %step_counter = alloca i32, align 4 ; Allocate memory for the step counter
+  %symbol_int = alloca i32, align 4 ; Allocate memory for the symbol integer
+
+  ; Initialize index, step counter, and state
+  store i32 0, ptr %index, align 4       ; Initialize index to 0
+  store i32 0, ptr %step_counter, align 4 ; Initialize step counter to 0
+  store i32 0, ptr %state_ptr, align 4   ; Initialize state to 0
+
+  ; Prompt for number of steps
+  %printf = call i32 (ptr, ...) @printf(ptr @num_steps_prompt)  ; Print prompt for number of steps
+  %scanf = call i32 (ptr, ...) @scanf(ptr @scanf_format, ptr %num_steps)  ; Read number of steps
+  %num_steps1 = load i32, ptr %num_steps, align 4  ; Load the number of steps
+
+  ; Prompt for array size
+  %printf2 = call i32 (ptr, ...) @printf(ptr @arr_size_prompt)  ; Print prompt for array size
+  %scanf3 = call i32 (ptr, ...) @scanf(ptr @scanf_format, ptr %arr_size)  ; Read array size
+  %arr_size4 = load i32, ptr %arr_size, align 4  ; Load the array size
+
+  ; Check if array size is positive
+  %is_positive = icmp sgt i32 %arr_size4, 0  ; Check if array size is greater than 0
+  br i1 %is_positive, label %allocate_memory, label %error_exit  ; Branch based on the result
+
+allocate_memory:
+  ; Allocate tape memory
+  %tape_malloc = call ptr @malloc(i32 %arr_size4)  ; Allocate memory for the tape
+  %tape = bitcast ptr %tape_malloc to ptr          ; Cast the allocated memory to an opaque pointer
+
+  ; Initialize tape with 'X'
+  store i32 0, ptr %i, align 4  ; Initialize loop variable i to 0
+  br label %init_loop
+
+init_loop:
+  %i_val = load i32, ptr %i, align 4  ; Load the current value of i
+  %init_cond = icmp ult i32 %i_val, %arr_size4  ; Check if i is less than the array size
+  br i1 %init_cond, label %init_loop_body, label %init_loop_end  ; Branch based on the result
+
+init_loop_body:
+  %element_ptr = getelementptr i8, ptr %tape, i32 %i_val  ; Get the pointer to the current element in the tape
+  store i8 88, ptr %element_ptr, align 1  ; Store 'X' (ASCII 88) in the current element
+  %next_i = add i32 %i_val, 1  ; Increment i by 1
+  store i32 %next_i, ptr %i, align 4  ; Store the updated value of i
+  br label %init_loop
+
+init_loop_end:
+  ; Main loop for tape machine
+  br label %main_loop
+
+main_loop:
+  %current_step = load i32, ptr %step_counter, align 4  ; Load the current step count
+  %continue_loop = icmp ult i32 %current_step, %num_steps1  ; Check if the current step is less than the total steps
+  br i1 %continue_loop, label %main_loop_body, label %main_loop_end  ; Branch based on the result
+
+main_loop_body:
+  %current_state = load i32, ptr %state_ptr, align 4  ; Load the current state
+  %current_index = load i32, ptr %index, align 4  ; Load the current index
+
+  ; Bounds check for index
+  %in_bounds = icmp uge i32 %current_index, 0  ; Check if index is greater than or equal to 0
+  %within_size = icmp ult i32 %current_index, %arr_size4  ; Check if index is less than the array size
+  %valid_index = and i1 %in_bounds, %within_size  ; Combine both conditions to ensure index is valid
+  br i1 %valid_index, label %valid_index_body, label %error_exit  ; Branch based on the result
+
+valid_index_body:
+  %current_symbol_ptr = getelementptr i8, ptr %tape, i32 %current_index  ; Get the pointer to the current symbol in the tape
+  %current_symbol = load i8, ptr %current_symbol_ptr, align 1  ; Load the current symbol
+
+  ; Handle different symbols
+  switch i8 %current_symbol, label %symbol_default [
+    i8 88, label %symbol_case_1  ; 'X'
+    i8 120, label %symbol_case_2 ; 'x'
+    i8 101, label %symbol_case_3 ; 'e'
+    i8 48, label %symbol_case_4  ; '0'
+    i8 49, label %symbol_case_5  ; '1'
+  ]
+
+symbol_case_1:
+  store i32 1, ptr %symbol_int, align 4  ; Set symbol_int to 1 for 'X'
+  br label %update_step
+
+symbol_case_2:
+  store i32 2, ptr %symbol_int, align 4  ; Set symbol_int to 2 for 'x'
+  br label %update_step
+
+symbol_case_3:
+  store i32 3, ptr %symbol_int, align 4  ; Set symbol_int to 3 for 'e'
+  br label %update_step
+
+symbol_case_4:
+  store i32 0, ptr %symbol_int, align 4  ; Set symbol_int to 0 for '0'
+  br label %update_step
+
+symbol_case_5:
+  store i32 4, ptr %symbol_int, align 4  ; Set symbol_int to 4 for '1'
+  br label %update_step
+
+symbol_default:
+  store i32 -1, ptr %symbol_int, align 4  ; Set symbol_int to -1 for unknown symbols
+  br label %update_step
+
+update_step:
+  ; Update the step counter and continue loop
+  %current_step8 = load i32, ptr %step_counter, align 4  ; Load the current step count
+  %next_step = add i32 %current_step8, 1  ; Increment the step count by 1
+  store i32 %next_step, ptr %step_counter, align 4  ; Store the updated step count
+  br label %main_loop
+
+main_loop_end:
+  ; Print the final state of the tape array
+  store i32 0, ptr %i, align 4  ; Initialize loop variable i to 0
+  br label %print_loop
+
+print_loop:
+  %i_val_print = load i32, ptr %i, align 4  ; Load the current value of i
+  %print_cond = icmp ult i32 %i_val_print, %arr_size4  ; Check if i is less than the array size
+  br i1 %print_cond, label %print_loop_body, label %print_loop_end  ; Branch based on the result
+
+print_loop_body:
+  %element_ptr_print = getelementptr i8, ptr %tape, i32 %i_val_print  ; Get the pointer to the current element in the tape
+  %element_val = load i8, ptr %element_ptr_print, align 1  ; Load the current element value
+  call i32 (ptr, ...) @printf(ptr @print_array_format, i8 %element_val)  ; Print the element value
+  %next_i_print = add i32 %i_val_print, 1  ; Increment i by 1
+  store i32 %next_i_print, ptr %i, align 4  ; Store the updated value of i
+  br label %print_loop
+
+print_loop_end:
+  ret i32 0  ; Return 0 to indicate successful execution
+
+error_exit:
+  ; Print error message and exit
+  %error_msg = call i32 (ptr, ...) @printf(ptr @print_format, i8 69) ; Print 'E' for error
+  ret i32 -1  ; Return -1 to indicate an error
+}
+
+================================================================================
+File: init.sh
+================================================================================
+
+nix-shell --pure
+
+================================================================================
+File: shell.nix
+================================================================================
+
+# shell.nix
+{ pkgs ? import <nixpkgs> {} }:
+
+pkgs.mkShell {
+  # Specify the packages to include in the environment
+  buildInputs = [
+
+    # this project
+    pkgs.llvm_18          # LLVM version 18
+    pkgs.lldb_18          # LLDB debugger for LLVM 18
+    pkgs.rustc            # Rust compiler
+    pkgs.cargo            # Rust package manager
+    pkgs.rust-analyzer    # Rust language server (optional)
+
+    # general setup
+    pkgs.zsh              # Zsh shell
+    pkgs.vim              # Vim editor
+    pkgs.coreutils        # the basic utilities - cat, ls, less etc.
+    pkgs.which
+    pkgs.openssh          # for ssh
+    pkgs.less             # git uses it :shock: and its not part of coreutils
+
+    # For rustc compiler
+    pkgs.libffi           # libffi library - rust uses ffi? or rustc does? I dunno
+    pkgs.libxml2
+
+
+    # version control baby
+    pkgs.git
+  ];
+
+  # Define environment variables and shell configurations
+  shellHook = ''
+    # Set environment variables
+    # export LLVM_SOURCE_DIR="/Users/mabhay/projects/llvm-project-llvmorg-18.1.8"
+
+    echo ">> Going to use vim in shell - change this if you don't like that"
+    # Use Vi keybindings in Zsh
+    set -o vi
+
+    # Preferred editor for local and remote sessions
+    if [[ -n $SSH_CONNECTION ]]; then
+      export EDITOR='vim'
+    else
+      export EDITOR='mvim'
+    fi
+
+    # Optional: Set Rust backtrace for better error messages
+    # export RUST_BACKTRACE=1
+
+    # Confirmation message
+    echo "🛠️  Edit 'shell.nix' and run 'nix-shell --pure' to add new packages"
+    echo "✅ Fully reproducible development environment loaded with LLVM 18, LLDB 18, Rust, Git and Vim!"
+  '';
+
+}
+
+================================================================================
+File: Cargo.lock
+================================================================================
+
+# This file is automatically @generated by Cargo.
+# It is not intended for manual editing.
+version = 3
+
+[[package]]
+name = "aho-corasick"
+version = "1.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e60d3430d3a69478ad0993f19238d2df97c507009a52b3c10addcd7f6bcb916"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
+name = "anstream"
+version = "0.6.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64e15c1ab1f89faffbf04a634d5e1962e9074f2741eef6d97f3c4e322426d526"
+dependencies = [
+ "anstyle",
+ "anstyle-parse",
+ "anstyle-query",
+ "anstyle-wincon",
+ "colorchoice",
+ "is_terminal_polyfill",
+ "utf8parse",
+]
+
+[[package]]
+name = "anstyle"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1bec1de6f59aedf83baf9ff929c98f2ad654b97c9510f4e70cf6f661d49fd5b1"
+
+[[package]]
+name = "anstyle-parse"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb47de1e80c2b463c735db5b217a0ddc39d612e7ac9e2e96a5aed1f57616c1cb"
+dependencies = [
+ "utf8parse",
+]
+
+[[package]]
+name = "anstyle-query"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d36fc52c7f6c869915e99412912f22093507da8d9e942ceaf66fe4b7c14422a"
+dependencies = [
+ "windows-sys",
+]
+
+[[package]]
+name = "anstyle-wincon"
+version = "3.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bf74e1b6e971609db8ca7a9ce79fd5768ab6ae46441c572e46cf596f59e57f8"
+dependencies = [
+ "anstyle",
+ "windows-sys",
+]
+
+[[package]]
+name = "anyhow"
+version = "1.0.89"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86fdf8605db99b54d3cd748a44c6d04df638eb5dafb219b135d0149bd0db01f6"
+
+[[package]]
+name = "cc"
+version = "1.1.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07b1695e2c7e8fc85310cde85aeaab7e3097f593c91d209d3f9df76c928100f0"
+dependencies = [
+ "shlex",
+]
+
+[[package]]
+name = "clap"
+version = "4.5.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0956a43b323ac1afaffc053ed5c4b7c1f1800bacd1683c353aabbb752515dd3"
+dependencies = [
+ "clap_builder",
+ "clap_derive",
+]
+
+[[package]]
+name = "clap_builder"
+version = "4.5.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d72166dd41634086d5803a47eb71ae740e61d84709c36f3c34110173db3961b"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "clap_lex",
+ "strsim",
+]
+
+[[package]]
+name = "clap_derive"
+version = "4.5.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ac6a0c7b1a9e9a5186361f67dfa1b88213572f427fb9ab038efb2bd8c582dab"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "clap_lex"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1462739cb27611015575c0c11df5df7601141071f07518d56fcc1be504cbec97"
+
+[[package]]
+name = "colorchoice"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3fd119d74b830634cea2a0f58bbd0d54540518a14397557951e79340abc28c0"
+
+[[package]]
+name = "either"
+version = "1.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
+
+[[package]]
+name = "env_filter"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f2c92ceda6ceec50f43169f9ee8424fe2db276791afde7b2cd8bc084cb376ab"
+dependencies = [
+ "log",
+ "regex",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.11.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e13fa619b91fb2381732789fc5de83b45675e882f66623b7d8cb4f643017018d"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "env_filter",
+ "humantime",
+ "log",
+]
+
+[[package]]
+name = "heck"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+
+[[package]]
+name = "humantime"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
+
+[[package]]
+name = "inkwell"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40fb405537710d51f6bdbc8471365ddd4cd6d3a3c3ad6e0c8291691031ba94b2"
+dependencies = [
+ "either",
+ "inkwell_internals",
+ "libc",
+ "llvm-sys",
+ "once_cell",
+ "thiserror",
+]
+
+[[package]]
+name = "inkwell_internals"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9dd28cfd4cfba665d47d31c08a6ba637eed16770abca2eccbbc3ca831fef1e44"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "is_terminal_polyfill"
+version = "1.70.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7943c866cc5cd64cbc25b2e01621d07fa8eb2a1a23160ee81ce38704e97b8ecf"
+
+[[package]]
+name = "lazy_static"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
+
+[[package]]
+name = "libc"
+version = "0.2.158"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8adc4bb1803a324070e64a98ae98f38934d91957a99cfb3a43dcbc01bc56439"
+
+[[package]]
+name = "llvm-sys"
+version = "180.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "778fa5fa02e32728e718f11eec147e6f134137399ab02fd2c13d32476337affa"
+dependencies = [
+ "anyhow",
+ "cc",
+ "lazy_static",
+ "libc",
+ "regex-lite",
+ "semver",
+]
+
+[[package]]
+name = "log"
+version = "0.4.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
+
+[[package]]
+name = "memchr"
+version = "2.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
+
+[[package]]
+name = "once_cell"
+version = "1.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
+
+[[package]]
+name = "proc-macro2"
+version = "1.0.86"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e719e8df665df0d1c8fbfd238015744736151d4445ec0836b8e628aae103b77"
+dependencies = [
+ "unicode-ident",
+]
+
+[[package]]
+name = "quote"
+version = "1.0.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5b9d34b8991d19d98081b46eacdd8eb58c6f2b201139f7c5f643cc155a633af"
+dependencies = [
+ "proc-macro2",
+]
+
+[[package]]
+name = "regex"
+version = "1.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4219d74c6b67a3654a9fbebc4b419e22126d13d2f3c4a07ee0cb61ff79a79619"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
+name = "regex-automata"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38caf58cc5ef2fed281f89292ef23f6365465ed9a41b7a7754eb4e26496c92df"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-syntax",
+]
+
+[[package]]
+name = "regex-lite"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "53a49587ad06b26609c52e423de037e7f57f20d53535d66e08c695f347df952a"
+
+[[package]]
+name = "regex-syntax"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a66a03ae7c801facd77a29370b4faec201768915ac14a721ba36f20bc9c209b"
+
+[[package]]
+name = "semver"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61697e0a1c7e512e84a621326239844a24d8207b4669b41bc18b32ea5cbf988b"
+
+[[package]]
+name = "shlex"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
+
+[[package]]
+name = "state_machine_compiler_rust"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "env_logger",
+ "inkwell",
+ "log",
+]
+
+[[package]]
+name = "strsim"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+
+[[package]]
+name = "syn"
+version = "2.0.77"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f35bcdf61fd8e7be6caf75f429fdca8beb3ed76584befb503b1569faee373ed"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
+
+[[package]]
+name = "thiserror"
+version = "1.0.64"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d50af8abc119fb8bb6dbabcfa89656f46f84aa0ac7688088608076ad2b459a84"
+dependencies = [
+ "thiserror-impl",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "1.0.64"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08904e7672f5eb876eaaf87e0ce17857500934f4981c4a0ab2b4aa98baac7fc3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "unicode-ident"
+version = "1.0.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e91b56cd4cadaeb79bbf1a5645f6b4f8dc5bde8834ad5894a8db35fda9efa1fe"
+
+[[package]]
+name = "utf8parse"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
+
+[[package]]
+name = "windows-sys"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
+dependencies = [
+ "windows-targets",
+]
+
+[[package]]
+name = "windows-targets"
+version = "0.52.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b724f72796e036ab90c1021d4780d4d3d648aca59e491e6b98e725b84e99973"
+dependencies = [
+ "windows_aarch64_gnullvm",
+ "windows_aarch64_msvc",
+ "windows_i686_gnu",
+ "windows_i686_gnullvm",
+ "windows_i686_msvc",
+ "windows_x86_64_gnu",
+ "windows_x86_64_gnullvm",
+ "windows_x86_64_msvc",
+]
+
+[[package]]
+name = "windows_aarch64_gnullvm"
+version = "0.52.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32a4622180e7a0ec044bb555404c800bc9fd9ec262ec147edd5989ccd0c02cd3"
+
+[[package]]
+name = "windows_aarch64_msvc"
+version = "0.52.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09ec2a7bb152e2252b53fa7803150007879548bc709c039df7627cabbd05d469"
+
+[[package]]
+name = "windows_i686_gnu"
+version = "0.52.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e9b5ad5ab802e97eb8e295ac6720e509ee4c243f69d781394014ebfe8bbfa0b"
+
+[[package]]
+name = "windows_i686_gnullvm"
+version = "0.52.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0eee52d38c090b3caa76c563b86c3a4bd71ef1a819287c19d586d7334ae8ed66"
+
+[[package]]
+name = "windows_i686_msvc"
+version = "0.52.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "240948bc05c5e7c6dabba28bf89d89ffce3e303022809e73deaefe4f6ec56c66"
+
+[[package]]
+name = "windows_x86_64_gnu"
+version = "0.52.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "147a5c80aabfbf0c7d901cb5895d1de30ef2907eb21fbbab29ca94c5b08b1a78"
+
+[[package]]
+name = "windows_x86_64_gnullvm"
+version = "0.52.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24d5b23dc417412679681396f2b49f3de8c1473deb516bd34410872eff51ed0d"
+
+[[package]]
+name = "windows_x86_64_msvc"
+version = "0.52.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
+
+================================================================================
+File: README.md
+================================================================================
+
+# State Machine Compiler
+
+A compiler for state machines written in Rust.
+
+Read about it on [Blog](https://mabhay3420.github.io/2024-05-07-state-machine-compiler-a-small-language/)
+
+## Syntax Details
+
+Look at the example below:
+
+```
+STATES: [b], o, q, p, f
+
+SYMBOLS: 0, 1, e, x
+
+TRANSITIONS:
+b, *, P(e)-R-P(e)-R-P(0)-R-R-P(0)-L-L, o
+o, 1, R-P(x)-L-L-L, o
+o, 0, X, q
+q, 0 | 1, R-R, q
+q, X, P(1)-L, p
+p, x, P(X)-R, q
+p, e, R, f
+p, X, L-L, p
+f, *, R-R, f
+f, X, P(0)-L-L, o
+```
+
+This state machine when run will generate following output:
+
+```
+001011011101111....
+```
+
+i.e. `0(1^n)` where `n` is from `0` to `infinity`.
+
+### Rules
+
+1. Each statement should be in a newline.
+2. Each transition is in a newline.
+3. `[b]` -> `b` is the initial state.
+4. Action `X` means do nothing.
+5. Print `X` amounts to erasing the content of the current head.
+6. Condition `*` means that the transition will happen irrespective of the current symbol, but it cannot be empty.
+
+## Usage
+
+The best way to get started is to use `nix` to install required packages.
+Assuming you can run `nix-shell` do this:
+
+``` bash
+nix-shell --pure # takes some time in the beginning
+cargo run_example
+```
+
+Clone the repository and run the following commands:
+
+1. Try with the [example.txt](example.txt) file:
+
+   ```bash
+   cargo run --bin state_machine_compiler_rust -- -i example.txt
+   ```
+
+2. Alternatively, pass the file path as an argument following the `-i` flag.
+
+3. To enable debug logging, set the `RUST_LOG` environment variable to `debug`.
+
+   ```bash
+   RUST_LOG=debug cargo run --bin state_machine_compiler_rust -- -i example.txt
+   ```
+
+<details>
+<summary>If you are working with executable, then refer to following doc
+</summary>
+
+```bash
+Usage: state_machine_compiler_rust --input-file-path <INPUT_FILE_PATH>
+
+Options:
+   -i, --input-file-path <INPUT_FILE_PATH>
+   -h, --help Print help
+```
+
+## Output
+
+Two files:
+
+1. `src/bin/state_machine.rs`
+
+   To test the the generated Rust code: `cargo run --bin state_machine`
+
+   Inputs:
+
+   - `num_steps` - The number of steps to run the state machine.
+   - `max_len` - The maximum length of the tape.
+
+   Outputs:
+
+   - The transitions
+   - The full tape content
+   - The cleaned tape content ( erasing the `X` symbol which stands for empty tape content)
+
+2. `state_machine.dot` is the state machine diagram.
+
+</details>
+
+## Implementation
+
+1. Parse the input file and generate the state machine. The data is stored in a `ParseTree` struct.
+
+   ```rust
+   struct ParseTree {
+      states: Vec<String>,
+      initial_state: String,
+      symbols: Vec<String>,
+      transitions: Vec<Transition>,
+   }
+   ```
+
+2. Generate the Rust code for the state machine.
+
+================================================================================
+File: experiments/a.ll
+================================================================================
+
+; ModuleID = 'src/a.c'
+source_filename = "src/a.c"
+target datalayout = "e-m:o-i64:64-i128:128-n32:64-S128"
+target triple = "arm64-apple-macosx13.0.0"
+
+@prompt_message = private unnamed_addr constant [17 x i8] c"Enter a number: \00", align 1
+@input_format = private unnamed_addr constant [3 x i8] c"%d\00", align 1
+@message_x_is_1 = private unnamed_addr constant [8 x i8] c"x is 1\0A\00", align 1
+@message_x_is_2 = private unnamed_addr constant [8 x i8] c"x is 2\0A\00", align 1
+@message_x_not_1_or_2 = private unnamed_addr constant [17 x i8] c"x is not 1 or 2\0A\00", align 1
+
+; Function Attrs: noinline nounwind optnone ssp uwtable(sync)
+define i32 @main() #0 {
+entry_block:
+  %return_value = alloca i32, align 4
+  %user_input = alloca i32, align 4
+  store i32 0, ptr %return_value, align 4
+  %print_prompt = call i32 (ptr, ...) @printf(ptr noundef @prompt_message)
+  %read_input = call i32 (ptr, ...) @scanf(ptr noundef @input_format, ptr noundef %user_input)
+  %input_value = load i32, ptr %user_input, align 4
+  switch i32 %input_value, label %default_case [
+    i32 1, label %case_x_is_1
+    i32 2, label %case_x_is_2
+  ]
+
+case_x_is_1:
+  %print_x_is_1 = call i32 (ptr, ...) @printf(ptr noundef @message_x_is_1)
+  br label %end_switch
+
+case_x_is_2:
+  %print_x_is_2 = call i32 (ptr, ...) @printf(ptr noundef @message_x_is_2)
+  br label %end_switch
+
+default_case:
+  %print_x_not_1_or_2 = call i32 (ptr, ...) @printf(ptr noundef @message_x_not_1_or_2)
+  br label %end_switch
+
+end_switch:
+  ret i32 0
+}
+
+declare i32 @printf(ptr noundef, ...) #1
+
+declare i32 @scanf(ptr noundef, ...) #1
+
+attributes #0 = { noinline nounwind optnone ssp uwtable(sync) "frame-pointer"="non-leaf" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="apple-m1" "target-features"="+aes,+complxnum,+crc,+dotprod,+fp-armv8,+fp16fml,+fullfp16,+jsconv,+lse,+neon,+pauth,+ras,+rcpc,+rdm,+sha2,+sha3,+v8.1a,+v8.2a,+v8.3a,+v8.4a,+v8.5a,+v8a,+zcm,+zcz" }
+attributes #1 = { "frame-pointer"="non-leaf" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="apple-m1" "target-features"="+aes,+complxnum,+crc,+dotprod,+fp-armv8,+fp16fml,+fullfp16,+jsconv,+lse,+neon,+pauth,+ras,+rcpc,+rdm,+sha2,+sha3,+v8.1a,+v8.2a,+v8.3a,+v8.4a,+v8.5a,+v8a,+zcm,+zcz" }
+
+!llvm.module.flags = !{!0, !1, !2, !3}
+!llvm.ident = !{!4}
+
+!0 = !{i32 1, !"wchar_size", i32 4}
+!1 = !{i32 8, !"PIC Level", i32 2}
+!2 = !{i32 7, !"uwtable", i32 1}
+!3 = !{i32 7, !"frame-pointer", i32 1}
+!4 = !{!"clang version 18.1.8"}
+================================================================================
+File: experiments/a.out (SKIPPED - Binary/Non-text file)
+================================================================================
+
+
+================================================================================
+File: experiments/a.c
+================================================================================
+
+#include <stdio.h>
+
+int main() {
+    printf("Hello world: %d\n", 0);
+    return 0;
+}
+================================================================================
+File: experiments/a.txt
+================================================================================
+
+   Compiling state_machine_compiler_rust v0.1.0 (/Users/mabhay/projects/state_machine_compiler_rust)
+warning: use of deprecated method `inkwell::types::IntType::<'ctx>::ptr_type`: Starting from version 15.0, LLVM doesn't differentiate between pointer types. Use Context::ptr_type instead.
+  --> src/llvmconverter.rs:30:42
+   |
+30 |         let ptr_type = context.i8_type().ptr_type(AddressSpace::default());
+   |                                          ^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+
+error[E0308]: mismatched types
+    --> src/llvmconverter.rs:52:29
+     |
+52   |         builder.build_store(index_ptr, i32_type.const_int(0, false));
+     |                 ----------- ^^^^^^^^^ expected `PointerValue<'_>`, found `Result<PointerValue<'_>, ...>`
+     |                 |
+     |                 arguments to this method are incorrect
+     |
+     = note: expected struct `inkwell::values::PointerValue<'_>`
+                  found enum `Result<inkwell::values::PointerValue<'_>, BuilderError>`
+note: method defined here
+    --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/builder.rs:1364:12
+     |
+1364 |     pub fn build_store<V: BasicValue<'ctx>>(
+     |            ^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `Result<inkwell::values::PointerValue<'_>, BuilderError>` value, panicking if the value is a `Result::Err`
+     |
+52   |         builder.build_store(index_ptr.expect("REASON"), i32_type.const_int(0, false));
+     |                                      +++++++++++++++++
+
+error[E0599]: no method named `as_pointer_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:57:58
+    |
+57  |         builder.build_call(printf_fn, &[num_steps_prompt.as_pointer_value().into()], "printf");
+    |                                                          ^^^^^^^^^^^^^^^^ method not found in `Result<GlobalValue<'_>, BuilderError>`
+    |
+note: the method `as_pointer_value` exists on the type `GlobalValue<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/global_value.rs:236:5
+    |
+236 |     pub fn as_pointer_value(self) -> PointerValue<'ctx> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `GlobalValue<'_>` value, panicking if the value is a `Result::Err`
+    |
+57  |         builder.build_call(printf_fn, &[num_steps_prompt.expect("REASON").as_pointer_value().into()], "printf");
+    |                                                         +++++++++++++++++
+
+error[E0599]: no method named `as_pointer_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:58:53
+    |
+58  |         builder.build_call(scanf_fn, &[scanf_format.as_pointer_value().into(), num_steps_ptr.into()], "scanf");
+    |                                                     ^^^^^^^^^^^^^^^^ method not found in `Result<GlobalValue<'_>, BuilderError>`
+    |
+note: the method `as_pointer_value` exists on the type `GlobalValue<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/global_value.rs:236:5
+    |
+236 |     pub fn as_pointer_value(self) -> PointerValue<'ctx> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `GlobalValue<'_>` value, panicking if the value is a `Result::Err`
+    |
+58  |         builder.build_call(scanf_fn, &[scanf_format.expect("REASON").as_pointer_value().into(), num_steps_ptr.into()], "scanf");
+    |                                                    +++++++++++++++++
+
+error[E0599]: no method named `as_basic_value_enum` found for enum `Result` in the current scope
+  --> src/llvmconverter.rs:61:68
+   |
+61 | ...ad(i32_type, num_steps_ptr.as_basic_value_enum().into_pointer_value(), "num_steps").into_int_value();
+   |                               ^^^^^^^^^^^^^^^^^^^ method not found in `Result<PointerValue<'_>, BuilderError>`
+
+error[E0599]: no method named `into_int_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:61:125
+    |
+61  | ...inter_value(), "num_steps").into_int_value();
+    |                                ^^^^^^^^^^^^^^ method not found in `Result<BasicValueEnum<'_>, BuilderError>`
+    |
+note: the method `into_int_value` exists on the type `BasicValueEnum<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/enums.rs:305:5
+    |
+305 |     pub fn into_int_value(self) -> IntValue<'ctx> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `BasicValueEnum<'_>` value, panicking if the value is a `Result::Err`
+    |
+61  |         let num_steps = builder.build_load(i32_type, num_steps_ptr.as_basic_value_enum().into_pointer_value(), "num_steps").expect("REASON").into_int_value();
+    |                                                                                                                            +++++++++++++++++
+
+error[E0599]: no method named `as_pointer_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:65:57
+    |
+65  |         builder.build_call(printf_fn, &[arr_size_prompt.as_pointer_value().into()], "printf");
+    |                                                         ^^^^^^^^^^^^^^^^ method not found in `Result<GlobalValue<'_>, BuilderError>`
+    |
+note: the method `as_pointer_value` exists on the type `GlobalValue<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/global_value.rs:236:5
+    |
+236 |     pub fn as_pointer_value(self) -> PointerValue<'ctx> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `GlobalValue<'_>` value, panicking if the value is a `Result::Err`
+    |
+65  |         builder.build_call(printf_fn, &[arr_size_prompt.expect("REASON").as_pointer_value().into()], "printf");
+    |                                                        +++++++++++++++++
+
+error[E0599]: no method named `as_pointer_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:66:53
+    |
+66  |         builder.build_call(scanf_fn, &[scanf_format.as_pointer_value().into(), arr_size_ptr.into()], "scanf");
+    |                                                     ^^^^^^^^^^^^^^^^ method not found in `Result<GlobalValue<'_>, BuilderError>`
+    |
+note: the method `as_pointer_value` exists on the type `GlobalValue<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/global_value.rs:236:5
+    |
+236 |     pub fn as_pointer_value(self) -> PointerValue<'ctx> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `GlobalValue<'_>` value, panicking if the value is a `Result::Err`
+    |
+66  |         builder.build_call(scanf_fn, &[scanf_format.expect("REASON").as_pointer_value().into(), arr_size_ptr.into()], "scanf");
+    |                                                    +++++++++++++++++
+
+error[E0599]: no method named `as_basic_value_enum` found for enum `Result` in the current scope
+  --> src/llvmconverter.rs:69:66
+   |
+69 |         let arr_size = builder.build_load(i32_type, arr_size_ptr.as_basic_value_enum().into_pointer_value(), "arr_size").into_int_value();
+   |                                                                  ^^^^^^^^^^^^^^^^^^^ method not found in `Result<PointerValue<'_>, BuilderError>`
+
+error[E0599]: no method named `into_int_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:69:122
+    |
+69  |         let arr_size = builder.build_load(i32_type, arr_size_ptr.as_basic_value_enum().into_pointer_value(), "arr_size").into_int_value();
+    |                                                                                                                          ^^^^^^^^^^^^^^ method not found in `Result<BasicValueEnum<'_>, BuilderError>`
+    |
+note: the method `into_int_value` exists on the type `BasicValueEnum<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/enums.rs:305:5
+    |
+305 |     pub fn into_int_value(self) -> IntValue<'ctx> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `BasicValueEnum<'_>` value, panicking if the value is a `Result::Err`
+    |
+69  |         let arr_size = builder.build_load(i32_type, arr_size_ptr.as_basic_value_enum().into_pointer_value(), "arr_size").expect("REASON").into_int_value();
+    |                                                                                                                         +++++++++++++++++
+
+error[E0599]: no method named `try_as_basic_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:72:14
+    |
+70  |           let tape_ptr = builder
+    |  ________________________-
+71  | |             .build_call(malloc_fn, &[arr_size.into()], "tape_malloc")
+72  | |             .try_as_basic_value()
+    | |             -^^^^^^^^^^^^^^^^^^ method not found in `Result<CallSiteValue<'_>, BuilderError>`
+    | |_____________|
+    |
+    |
+note: the method `try_as_basic_value` exists on the type `CallSiteValue<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/call_site_value.rs:160:5
+    |
+160 |     pub fn try_as_basic_value(self) -> Either<BasicValueEnum<'ctx>, InstructionValue<'ctx>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `CallSiteValue<'_>` value, panicking if the value is a `Result::Err`
+    |
+71  |             .build_call(malloc_fn, &[arr_size.into()], "tape_malloc").expect("REASON")
+    |                                                                      +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/llvmconverter.rs:84:29
+     |
+84   |         builder.build_store(i, i32_type.const_int(0, false));
+     |                 ----------- ^ expected `PointerValue<'_>`, found `Result<PointerValue<'_>, ...>`
+     |                 |
+     |                 arguments to this method are incorrect
+     |
+     = note: expected struct `inkwell::values::PointerValue<'_>`
+                  found enum `Result<inkwell::values::PointerValue<'_>, BuilderError>`
+note: method defined here
+    --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/builder.rs:1364:12
+     |
+1364 |     pub fn build_store<V: BasicValue<'ctx>>(
+     |            ^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `Result<inkwell::values::PointerValue<'_>, BuilderError>` value, panicking if the value is a `Result::Err`
+     |
+84   |         builder.build_store(i.expect("REASON"), i32_type.const_int(0, false));
+     |                              +++++++++++++++++
+
+error[E0599]: no method named `as_basic_value_enum` found for enum `Result` in the current scope
+  --> src/llvmconverter.rs:89:52
+   |
+89 |         let i_val = builder.build_load(i32_type, i.as_basic_value_enum().into_pointer_value(), "i_val").into_int_value();
+   |                                                    ^^^^^^^^^^^^^^^^^^^ method not found in `Result<PointerValue<'_>, BuilderError>`
+
+error[E0599]: no method named `into_int_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:89:105
+    |
+89  |         let i_val = builder.build_load(i32_type, i.as_basic_value_enum().into_pointer_value(), "i_val").into_int_value();
+    |                                                                                                         ^^^^^^^^^^^^^^ method not found in `Result<BasicValueEnum<'_>, BuilderError>`
+    |
+note: the method `into_int_value` exists on the type `BasicValueEnum<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/enums.rs:305:5
+    |
+305 |     pub fn into_int_value(self) -> IntValue<'ctx> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `BasicValueEnum<'_>` value, panicking if the value is a `Result::Err`
+    |
+89  |         let i_val = builder.build_load(i32_type, i.as_basic_value_enum().into_pointer_value(), "i_val").expect("REASON").into_int_value();
+    |                                                                                                        +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/llvmconverter.rs:96:29
+     |
+96   |         builder.build_store(element_ptr, i8_type.const_int('X' as u64, false));
+     |                 ----------- ^^^^^^^^^^^ expected `PointerValue<'_>`, found `Result<PointerValue<'_>, ...>`
+     |                 |
+     |                 arguments to this method are incorrect
+     |
+     = note: expected struct `inkwell::values::PointerValue<'_>`
+                  found enum `Result<inkwell::values::PointerValue<'_>, BuilderError>`
+note: method defined here
+    --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/builder.rs:1364:12
+     |
+1364 |     pub fn build_store<V: BasicValue<'ctx>>(
+     |            ^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `Result<inkwell::values::PointerValue<'_>, BuilderError>` value, panicking if the value is a `Result::Err`
+     |
+96   |         builder.build_store(element_ptr.expect("REASON"), i8_type.const_int('X' as u64, false));
+     |                                        +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/llvmconverter.rs:98:29
+     |
+98   |         builder.build_store(i, next_i);
+     |                 ----------- ^ expected `PointerValue<'_>`, found `Result<PointerValue<'_>, ...>`
+     |                 |
+     |                 arguments to this method are incorrect
+     |
+     = note: expected struct `inkwell::values::PointerValue<'_>`
+                  found enum `Result<inkwell::values::PointerValue<'_>, BuilderError>`
+note: method defined here
+    --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/builder.rs:1364:12
+     |
+1364 |     pub fn build_store<V: BasicValue<'ctx>>(
+     |            ^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `Result<inkwell::values::PointerValue<'_>, BuilderError>` value, panicking if the value is a `Result::Err`
+     |
+98   |         builder.build_store(i.expect("REASON"), next_i);
+     |                              +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/llvmconverter.rs:109:29
+     |
+109  |         builder.build_store(i, i32_type.const_int(0, false));
+     |                 ----------- ^ expected `PointerValue<'_>`, found `Result<PointerValue<'_>, ...>`
+     |                 |
+     |                 arguments to this method are incorrect
+     |
+     = note: expected struct `inkwell::values::PointerValue<'_>`
+                  found enum `Result<inkwell::values::PointerValue<'_>, BuilderError>`
+note: method defined here
+    --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/builder.rs:1364:12
+     |
+1364 |     pub fn build_store<V: BasicValue<'ctx>>(
+     |            ^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `Result<inkwell::values::PointerValue<'_>, BuilderError>` value, panicking if the value is a `Result::Err`
+     |
+109  |         builder.build_store(i.expect("REASON"), i32_type.const_int(0, false));
+     |                              +++++++++++++++++
+
+error[E0599]: no method named `as_basic_value_enum` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:114:58
+    |
+114 |         let i_val_print = builder.build_load(i32_type, i.as_basic_value_enum().into_pointer_value(), "i_val_print").into_int_value();
+    |                                                          ^^^^^^^^^^^^^^^^^^^ method not found in `Result<PointerValue<'_>, BuilderError>`
+
+error[E0599]: no method named `into_int_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:114:117
+    |
+114 |         let i_val_print = builder.build_load(i32_type, i.as_basic_value_enum().into_pointer_value(), "i_val_print").into_int_value();
+    |                                                                                                                     ^^^^^^^^^^^^^^ method not found in `Result<BasicValueEnum<'_>, BuilderError>`
+    |
+note: the method `into_int_value` exists on the type `BasicValueEnum<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/enums.rs:305:5
+    |
+305 |     pub fn into_int_value(self) -> IntValue<'ctx> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `BasicValueEnum<'_>` value, panicking if the value is a `Result::Err`
+    |
+114 |         let i_val_print = builder.build_load(i32_type, i.as_basic_value_enum().into_pointer_value(), "i_val_print").expect("REASON").into_int_value();
+    |                                                                                                                    +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/llvmconverter.rs:121:55
+     |
+121  |         let element_val = builder.build_load(i8_type, element_ptr_print, "element_val");
+     |                                   ----------          ^^^^^^^^^^^^^^^^^ expected `PointerValue<'_>`, found `Result<PointerValue<'_>, ...>`
+     |                                   |
+     |                                   arguments to this method are incorrect
+     |
+     = note: expected struct `inkwell::values::PointerValue<'_>`
+                  found enum `Result<inkwell::values::PointerValue<'_>, BuilderError>`
+note: method defined here
+    --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/builder.rs:1446:12
+     |
+1446 |     pub fn build_load<T: BasicType<'ctx>>(
+     |            ^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `Result<inkwell::values::PointerValue<'_>, BuilderError>` value, panicking if the value is a `Result::Err`
+     |
+121  |         let element_val = builder.build_load(i8_type, element_ptr_print.expect("REASON"), "element_val");
+     |                                                                        +++++++++++++++++
+
+error[E0599]: no method named `as_pointer_value` found for enum `Result` in the current scope
+   --> src/llvmconverter.rs:123:60
+    |
+123 |         builder.build_call(printf_fn, &[print_array_format.as_pointer_value().into(), element_val.into()], "printf");
+    |                                                            ^^^^^^^^^^^^^^^^ method not found in `Result<GlobalValue<'_>, BuilderError>`
+    |
+note: the method `as_pointer_value` exists on the type `GlobalValue<'_>`
+   --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/values/global_value.rs:236:5
+    |
+236 |     pub fn as_pointer_value(self) -> PointerValue<'ctx> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `GlobalValue<'_>` value, panicking if the value is a `Result::Err`
+    |
+123 |         builder.build_call(printf_fn, &[print_array_format.expect("REASON").as_pointer_value().into(), element_val.into()], "printf");
+    |                                                           +++++++++++++++++
+
+error[E0308]: mismatched types
+    --> src/llvmconverter.rs:125:29
+     |
+125  |         builder.build_store(i, next_i_print);
+     |                 ----------- ^ expected `PointerValue<'_>`, found `Result<PointerValue<'_>, ...>`
+     |                 |
+     |                 arguments to this method are incorrect
+     |
+     = note: expected struct `inkwell::values::PointerValue<'_>`
+                  found enum `Result<inkwell::values::PointerValue<'_>, BuilderError>`
+note: method defined here
+    --> /Users/mabhay/.cargo/registry/src/index.crates.io-6f17d22bba15001f/inkwell-0.5.0/src/builder.rs:1364:12
+     |
+1364 |     pub fn build_store<V: BasicValue<'ctx>>(
+     |            ^^^^^^^^^^^
+help: consider using `Result::expect` to unwrap the `Result<inkwell::values::PointerValue<'_>, BuilderError>` value, panicking if the value is a `Result::Err`
+     |
+125  |         builder.build_store(i.expect("REASON"), next_i_print);
+     |                              +++++++++++++++++
+
+Some errors have detailed explanations: E0308, E0599.
+For more information about an error, try `rustc --explain E0308`.
+warning: `state_machine_compiler_rust` (lib) generated 1 warning
+error: could not compile `state_machine_compiler_rust` (lib) due to 21 previous errors; 1 warning emitted
+
+================================================================================
+File: tests/lexer.rs
+================================================================================
+
+use state_machine_compiler_rust::lexer::{Lexer, Token, TokenType};
+
+#[test]
+fn test_next_char() {
+    let code = " states: [A], B ";
+    let mut lexer = Lexer::new(code);
+    let mut chars = Vec::new();
+    while lexer.peek() != '\0' {
+        chars.push(lexer.cur_char);
+        lexer.next_char();
+    }
+    assert_eq!(chars.iter().collect::<String>(), code);
+}
+
+#[test]
+fn test_get_token() {
+    let code = "[],";
+    let expected = vec![
+        Token {
+            text: "[".to_string(),
+            kind: TokenType::LeftBracket,
+        },
+        Token {
+            text: "]".to_string(),
+            kind: TokenType::RightBracket,
+        },
+        Token {
+            text: ",".to_string(),
+            kind: TokenType::COMMA,
+        },
+        Token {
+            text: "\n".to_string(),
+            kind: TokenType::NEWLINE,
+        },
+    ];
+    let mut lexer = Lexer::new(code);
+    let mut result = Vec::new();
+    while let Some(token) = lexer.get_token() {
+        if token.kind == TokenType::EOF {
+            break;
+        }
+        result.push(token);
+    }
+    println!("Result: {:?}", result);
+    println!("Expected: {:?}", expected);
+    assert_eq!(result, expected);
+    // assert!(false)
+}
+
+#[test]
+#[should_panic(expected = "Lexical Error: Unknown token: !")]
+fn test_invalid_token() {
+    let code = "[!]";
+    let mut lexer = Lexer::new(code);
+    while let Some(token) = lexer.get_token() {
+        println!("{:?}", token);
+        if token.kind == TokenType::EOF {
+            break;
+        }
+    }
+}
+
+#[test]
+fn test_whitespace_token() {
+    let code = "[ ]";
+    let expected = vec![
+        Token {
+            text: "[".to_string(),
+            kind: TokenType::LeftBracket,
+        },
+        Token {
+            text: "]".to_string(),
+            kind: TokenType::RightBracket,
+        },
+        Token {
+            text: "\n".to_string(),
+            kind: TokenType::NEWLINE,
+        },
+    ];
+    let mut lexer = Lexer::new(code);
+    let mut result = Vec::new();
+    while let Some(token) = lexer.get_token() {
+        if token.kind == TokenType::EOF {
+            break;
+        }
+        result.push(token);
+    }
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn test_more_tokens() {
+    let code = "[ * ],--|";
+    let expected = vec![
+        Token {
+            text: "[".to_string(),
+            kind: TokenType::LeftBracket,
+        },
+        Token {
+            text: "*".to_string(),
+            kind: TokenType::STAR,
+        },
+        Token {
+            text: "]".to_string(),
+            kind: TokenType::RightBracket,
+        },
+        Token {
+            text: ",".to_string(),
+            kind: TokenType::COMMA,
+        },
+        Token {
+            text: "-".to_string(),
+            kind: TokenType::DASH,
+        },
+        Token {
+            text: "-".to_string(),
+            kind: TokenType::DASH,
+        },
+        Token {
+            text: "|".to_string(),
+            kind: TokenType::OR,
+        },
+        Token {
+            text: "\n".to_string(),
+            kind: TokenType::NEWLINE,
+        },
+    ];
+    let mut lexer = Lexer::new(code);
+    let mut result = Vec::new();
+    while let Some(token) = lexer.get_token() {
+        if token.kind == TokenType::EOF {
+            break;
+        }
+        result.push(token);
+    }
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn test_comments() {
+    let code = "[]# This is a comment *\n    * |\n    # This is another comment - -";
+    let expected = vec![
+        Token {
+            text: "[".to_string(),
+            kind: TokenType::LeftBracket,
+        },
+        Token {
+            text: "]".to_string(),
+            kind: TokenType::RightBracket,
+        },
+        Token {
+            text: "\n".to_string(),
+            kind: TokenType::NEWLINE,
+        },
+        Token {
+            text: "*".to_string(),
+            kind: TokenType::STAR,
+        },
+        Token {
+            text: "|".to_string(),
+            kind: TokenType::OR,
+        },
+        Token {
+            text: "\n".to_string(),
+            kind: TokenType::NEWLINE,
+        },
+        Token {
+            text: "\n".to_string(),
+            kind: TokenType::NEWLINE,
+        },
+    ];
+    let mut lexer = Lexer::new(code);
+    let mut result = Vec::new();
+    while let Some(token) = lexer.get_token() {
+        if token.kind == TokenType::EOF {
+            break;
+        }
+        result.push(token);
+    }
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn test_keywords_and_identifiers() {
+    let code = "
+        STATES: [A], B, C1
+        SYMBOLS: [0 , 1, X, R]
+        TRANSITIONS: [A, 0 | 1, L-R-P(X), B], [B, * , L , C1]
+    ";
+    let expected = vec![
+        Token {
+            text: "\n".to_string(),
+            kind: TokenType::NEWLINE,
+        },
+        Token {
+            text: "STATES".to_string(),
+            kind: TokenType::STATES,
+        },
+        Token {
+            text: ":".to_string(),
+            kind: TokenType::COLON,
+        },
+        Token {
+            text: "[".to_string(),
+            kind: TokenType::LeftBracket,
+        },
+        Token {
+            text: "A".to_string(),
+            kind: TokenType::IDENT,
+        },
+        Token {
+            text: "]".to_string(),
+            kind: TokenType::RightBracket,
+        },
+        Token {
+            text: ",".to_string(),
+            kind: TokenType::COMMA,
+        },
+        Token {
+            text: "B".to_string(),
+            kind: TokenType::IDENT,
+        },
+        Token {
+            text: ",".to_string(),
+            kind: TokenType::COMMA,
+        },
+        Token {
+            text: "C1".to_string(),
+            kind: TokenType::IDENT,
+        },
+        Token {
+            text: "\n".to_string(),
+            kind: TokenType::NEWLINE,
+        },
+        Token {
+            text: "SYMBOLS".to_string(),
+            kind: TokenType::SYMBOLS,
+        },
+        Token {
+            text: ":".to_string(),
+            kind: TokenType::COLON,
+        },
+        Token {
+            text: "[".to_string(),
+            kind: TokenType::LeftBracket,
+        },
+        Token {
+            text: "0".to_string(),
+            kind: TokenType::IDENT,
+        },
+        Token {
+            text: ",".to_string(),
+            kind: TokenType::COMMA,
+        },
+        Token {
+            text: "1".to_string(),
+            kind: TokenType::IDENT,
+        },
+        Token {
+            text: ",".to_string(),
+            kind: TokenType::COMMA,
+        },
+        Token {
+            text: "X".to_string(),
+            kind: TokenType::X,
+        },
+        Token {
+            text: ",".to_string(),
+            kind: TokenType::COMMA,
+        },
+        Token {
+            text: "R".to_string(),
+            kind: TokenType::R,
+        },
+        Token {
+            text: "]".to_string(),
+            kind: TokenType::RightBracket,
+        },
+        Token {
+            text: "\n".to_string(),
+            kind: TokenType::NEWLINE,
+        },
+        Token {
+            text: "TRANSITIONS".to_string(),
+            kind: TokenType::TRANSITIONS,
+        },
+        Token {
+            text: ":".to_string(),
+            kind: TokenType::COLON,
+        },
+        Token {
+            text: "[".to_string(),
+            kind: TokenType::LeftBracket,
+        },
+        Token {
+            text: "A".to_string(),
+            kind: TokenType::IDENT,
+        },
+        Token {
+            text: ",".to_string(),
+            kind: TokenType::COMMA,
+        },
+        Token {
+            text: "0".to_string(),
+            kind: TokenType::IDENT,
+        },
+        Token {
+            text: "|".to_string(),
+            kind: TokenType::OR,
+        },
+        Token {
+            text: "1".to_string(),
+            kind: TokenType::IDENT,
+        },
+        Token {
+            text: ",".to_string(),
+            kind: TokenType::COMMA,
+        },
+        Token {
+            text: "L".to_string(),
+            kind: TokenType::L,
+        },
+        Token {
+            text: "-".to_string(),
+            kind: TokenType::DASH,
+        },
+        Token {
+            text: "R".to_string(),
+            kind: TokenType::R,
+        },
+        Token {
+            text: "-".to_string(),
+            kind: TokenType::DASH,
+        },
+        Token {
+            text: "P".to_string(),
+            kind: TokenType::P,
+        },
+        Token {
+            text: "(".to_string(),
+            kind: TokenType::LeftParen,
+        },
+        Token {
+            text: "X".to_string(),
+            kind: TokenType::X,
+        },
+        Token {
+            text: ")".to_string(),
+            kind: TokenType::RightParen,
+        },
+        Token {
+            text: ",".to_string(),
+            kind: TokenType::COMMA,
+        },
+        Token {
+            text: "B".to_string(),
+            kind: TokenType::IDENT,
+        },
+        Token {
+            text: "]".to_string(),
+            kind: TokenType::RightBracket,
+        },
+        Token {
+            text: ",".to_string(),
+            kind: TokenType::COMMA,
+        },
+        Token {
+            text: "[".to_string(),
+            kind: TokenType::LeftBracket,
+        },
+        Token {
+            text: "B".to_string(),
+            kind: TokenType::IDENT,
+        },
+        Token {
+            text: ",".to_string(),
+            kind: TokenType::COMMA,
+        },
+        Token {
+            text: "*".to_string(),
+            kind: TokenType::STAR,
+        },
+        Token {
+            text: ",".to_string(),
+            kind: TokenType::COMMA,
+        },
+        Token {
+            text: "L".to_string(),
+            kind: TokenType::L,
+        },
+        Token {
+            text: ",".to_string(),
+            kind: TokenType::COMMA,
+        },
+        Token {
+            text: "C1".to_string(),
+            kind: TokenType::IDENT,
+        },
+        Token {
+            text: "]".to_string(),
+            kind: TokenType::RightBracket,
+        },
+        Token {
+            text: "\n".to_string(),
+            kind: TokenType::NEWLINE,
+        },
+        Token {
+            text: "\n".to_string(),
+            kind: TokenType::NEWLINE,
+        },
+    ];
+    let mut lexer = Lexer::new(code);
+    let mut result = Vec::new();
+    while let Some(token) = lexer.get_token() {
+        if token.kind == TokenType::EOF {
+            break;
+        }
+        result.push(token);
+    }
+    assert_eq!(result, expected);
+}
+
+================================================================================
+File: tests/parser.rs
+================================================================================
+
+use state_machine_compiler_rust::lexer::Lexer;
+use state_machine_compiler_rust::parser::Parser;
+
+#[test]
+fn test_basic_parser() {
+    let code = "
+        STATES: [A], B, C, D
+        SYMBOLS: 0, 1, B
+        TRANSITIONS:
+        A, 0 | 1, X-L-L-P(X)-L, B
+        B, * , L , C1
+    ";
+
+    let lexer = Lexer::new(code);
+    let mut parser = Parser::new(lexer);
+    parser.program();
+    println!("Parsing Completed");
+}
+
+#[test]
+fn test_basic_parser_2() {
+    let code = "
+        STATES: A, [B], C, D
+        SYMBOLS: 0, 1, B
+        TRANSITIONS:
+        A, 0 | 1, R-L-L-P(X)-L, B
+        B, * , L , C1";
+
+    let lexer = Lexer::new(code);
+    let mut parser = Parser::new(lexer);
+    parser.program();
+    println!("Parsing Completed");
+}
+
+#[test]
+fn test_basic_parser_3() {
+    let code = "
+        STATES: A, B, C, [D]
+        SYMBOLS: 0, 1, B
+        TRANSITIONS:
+        A, 0 | 1, R-L-L-P(X)-L, B
+        B, * , L , C1";
+
+    let lexer = Lexer::new(code);
+    let mut parser = Parser::new(lexer);
+    parser.program();
+    println!("Parsing Completed");
+}
+
+#[test]
+#[should_panic(expected = "Parsing error: Initial state already defined.")]
+fn test_double_initial_condition() {
+    let code = "
+        STATES: A, [B], C, [D]
+        SYMBOLS: 0, 1, B
+        TRANSITIONS:
+        A, 0 | 1, R-L-L-P(X)-L, B
+        B, * , L , C1";
+
+    let lexer = Lexer::new(code);
+    let mut parser = Parser::new(lexer);
+    parser.program();
+    println!("Parsing Completed");
+}
+
+#[test]
+#[should_panic(expected = "Parsing error: Initial state not defined")]
+fn test_initial_condition_not_provided() {
+    let code = "
+        STATES: A, B, C, D
+        SYMBOLS: 0, 1, B
+        TRANSITIONS:
+        A, 0 | 1, R-L-L-P(X)-L, B
+        B, * , L , C1
+    ";
+
+    let lexer = Lexer::new(code);
+    let mut parser = Parser::new(lexer);
+    parser.program();
+    println!("Parsing Completed");
+}
+
+#[test]
+#[should_panic(expected = "Parsing error: Expected R or L or P or X as an action step, got IDENT: \"A\"")]
+fn test_invalid_action() {
+    let code = "
+        STATES: A, [B], C, D
+        SYMBOLS: 0, 1, B
+        TRANSITIONS:
+        A, 0 | 1, X-A-L-P(X)-L, B
+        B, * , L , C1
+    ";
+
+    let lexer = Lexer::new(code);
+    let mut parser = Parser::new(lexer);
+    parser.program();
+    println!("Parsing Completed");
+}
+
+#[test]
+#[should_panic(expected = "Parsing error: State A already defined.")]
+fn test_duplicate_state_identifiers() {
+    let code = "
+    STATES: A, [B], A, C
+
+    SYMBOLS: 0, 1, B
+
+    TRANSITIONS:
+    B, 0 | 1, R-L-L-P(X)-L, C
+    C, * , L , A
+    ";
+
+    let lexer = Lexer::new(code);
+    let mut parser = Parser::new(lexer);
+    parser.program();
+    println!("Parsing Completed");
+}
+
+#[test]
+#[should_panic(expected = "Parsing error: Symbol 0 already defined.")]
+fn test_duplicate_symbol_identifiers() {
+    let code = "
+    STATES: [A], B, C
+
+    SYMBOLS: 0, 1, 0
+
+    TRANSITIONS:
+    A, 0 | 1, R-L-L-P(X)-L, B
+    B, * , L , C
+    ";
+
+    let lexer = Lexer::new(code);
+    let mut parser = Parser::new(lexer);
+    parser.program();
+    println!("Parsing Completed");
+}
+
+#[test]
+#[should_panic(expected = "Parsing error: Expected IDENT, got COMMA")]
+fn test_invalid_transition_condition() {
+    let code = "
+    STATES: [A], B, C
+
+    SYMBOLS: 0, 1
+
+    TRANSITIONS:
+    A, 0 | , R-L-L-P(X)-L, B
+    B, * , L , C
+    ";
+
+    let lexer = Lexer::new(code);
+    let mut parser = Parser::new(lexer);
+    parser.program();
+    println!("Parsing Completed");
+}
+
+#[test]
+#[should_panic(expected = "Parsing error: Symbol Y not defined, So cannot be printed.")]
+fn test_invalid_print_symbol() {
+    let code = "
+    STATES: [A], B, C
+
+    SYMBOLS: 0, 1
+
+    TRANSITIONS:
+    A, 0 | 1, R-L-L-P(Y)-L, B
+    B, * , L , C
+    ";
+
+    let lexer = Lexer::new(code);
+    let mut parser = Parser::new(lexer);
+    parser.program();
+    println!("Parsing Completed");
+}
+================================================================================
+File: docs/TODO.txt
+================================================================================
+
+1. Test with multiple state machines and verify the output.
+2. Read up about llvm, its rust bindings and try to generate the code in llvm IR.
+
+Considerations:
+1. Disallow utf-8 characters in the input file.
+2. Validate the parse tree in the end, resulting in better error messages and cleaner code.
+================================================================================
+File: docs/prompt.md
+================================================================================
+
+we are writing a state machine compiler in rust.
+we start from a user input like this:
+```
+STATES: [b], o, q, p, f
+
+SYMBOLS: 0, 1, e, x
+
+TRANSITIONS:
+b, *, P(e)-R-P(e)-R-P(0)-R-R-P(0)-L-L, o
+o, 1, R-P(x)-L-L-L, o
+o, 0, X, q
+q, 0 | 1, R-R, q
+q, X, P(1)-L, p
+p, x, P(X)-R, q
+p, e, R, f
+p, X, L-L, p
+f, *, R-R, f
+f, X, P(0)-L-L, o
+```
+
+and parse it into following structure:
+
+```
+#[derive(Debug, PartialEq, Clone)]
+pub enum Condition {
+    OR(Vec<String>),
+    Star,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum TransitionStep {
+    R,
+    L,
+    X,
+    P(String), // A function call
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Transition {
+    pub initial_state: String,
+    pub condition: Condition,
+    pub steps: Vec<TransitionStep>,
+    pub final_state: String,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ParseTree {
+    pub states: Vec<String>,
+    pub initial_state: String,
+    pub symbols: Vec<String>,
+    pub transitions: Vec<Transition>,
+}
+```
+
+Then we are converting this to llvm ir by using llvm rust bindings.
+
+Current state of the program:
+```
+use std::collections::HashMap;
+
+use crate::parser::{Condition, ParseTree, TransitionStep};
+use inkwell::basic_block::BasicBlock;
+use inkwell::context::Context;
+use inkwell::targets::TargetTriple;
+use inkwell::AddressSpace;
+use inkwell::IntPredicate;
+
+// Trait for converting to LLVM value
+pub trait ToLlvmValue {
+    fn to_llvm_value(&self) -> String;
+}
+
+// Trait for converting to LLVM IR
+pub trait ToLlvmIr {
+    unsafe fn to_llvm_ir(&self) -> String;
+}
+
+impl ToLlvmIr for ParseTree {
+    unsafe fn to_llvm_ir(&self) -> String {
+        // Create LLVM context, module, and builder
+        let context = Context::create();
+        let module = context.create_module("tape_machine");
+        let builder = context.create_builder();
+
+        // Set target triple for macOS on ARM64
+        let triple = TargetTriple::create("arm64-apple-macosx13.0.0");
+        module.set_triple(&triple);
+
+        // Define basic LLVM types
+        let i32_type = context.i32_type();
+        let i8_type = context.i8_type();
+        // let ptr_type = context.ptr_type(AddressSpace::default());
+        let ptr_type = context.ptr_type(AddressSpace::default())
+
+        // Declare external functions (printf, malloc, scanf, strcmp)
+        let printf_type = i32_type.fn_type(&[ptr_type.into()], true);
+        let printf_fn = module.add_function("printf", printf_type, None);
+
+        let malloc_type = ptr_type.fn_type(&[i32_type.into()], false);
+        let malloc_fn = module.add_function("malloc", malloc_type, None);
+
+        let scanf_type = i32_type.fn_type(&[ptr_type.into(), ptr_type.into()], true);
+        let scanf_fn = module.add_function("scanf", scanf_type, None);
+
+        let string_eq_type = i32_type.fn_type(&[ptr_type.into(), ptr_type.into()], false);
+        let string_eq_fn = module.add_function("strcmp", string_eq_type, None);
+
+        // Declare get_unique_case_value function
+        let get_unique_case_value_type =
+            i32_type.fn_type(&[ptr_type.into(), i8_type.into()], false);
+        let get_unique_case_value_fn =
+            module.add_function("get_unique_case_value", get_unique_case_value_type, None);
+
+        // Define the dummy function
+        let get_unique_case_value_block =
+            context.append_basic_block(get_unique_case_value_fn, "entry");
+        builder.position_at_end(get_unique_case_value_block);
+
+        // For simplicity, we'll just return a constant value
+        let dummy_result = i32_type.const_int(42, false);
+        builder.build_return(Some(&dummy_result));
+
+        // Define main function
+        let main_type = i32_type.fn_type(&[], false);
+        let main_fn = module.add_function("main", main_type, None);
+        let entry = context.append_basic_block(main_fn, "entry");
+        builder.position_at_end(entry);
+
+        // Allocate and initialize variables
+        let num_steps_ptr = builder.build_alloca(i32_type, "num_steps").unwrap();
+        let arr_size_ptr = builder.build_alloca(i32_type, "arr_size").unwrap();
+        let index_ptr = builder.build_alloca(i32_type, "index").unwrap();
+        builder
+            .build_store(index_ptr, i32_type.const_int(0, false))
+            .unwrap();
+
+        // Prompt user for input (number of steps)
+        let num_steps_prompt = builder
+            .build_global_string_ptr("Enter number of steps: ", "num_steps_prompt")
+            .unwrap();
+        let scanf_format = builder
+            .build_global_string_ptr("%d", "scanf_format")
+            .unwrap();
+        builder
+            .build_call(
+                printf_fn,
+                &[num_steps_prompt.as_pointer_value().into()],
+                "printf",
+            )
+            .unwrap();
+        builder
+            .build_call(
+                scanf_fn,
+                &[scanf_format.as_pointer_value().into(), num_steps_ptr.into()],
+                "scanf",
+            )
+            .unwrap();
+
+        // Load num_steps value
+        let num_steps = builder
+            .build_load(i32_type, num_steps_ptr, "num_steps")
+            .unwrap()
+            .into_int_value();
+
+        // Prompt user for input (array size)
+        let arr_size_prompt = builder
+            .build_global_string_ptr("Enter array size: ", "arr_size_prompt")
+            .unwrap();
+        let scanf_format = builder
+            .build_global_string_ptr("%d", "scanf_format")
+            .unwrap();
+        builder
+            .build_call(
+                printf_fn,
+                &[arr_size_prompt.as_pointer_value().into()],
+                "printf",
+            )
+            .unwrap();
+        builder
+            .build_call(
+                scanf_fn,
+                &[scanf_format.as_pointer_value().into(), arr_size_ptr.into()],
+                "scanf",
+            )
+            .unwrap();
+
+        // Allocate tape dynamically using malloc
+        let arr_size = builder
+            .build_load(i32_type, arr_size_ptr, "arr_size")
+            .unwrap()
+            .into_int_value();
+        let tape_ptr = builder
+            .build_call(malloc_fn, &[arr_size.into()], "tape_malloc")
+            .unwrap()
+            .try_as_basic_value()
+            .left()
+            .unwrap()
+            .into_pointer_value();
+
+        let init_loop = context.append_basic_block(main_fn, "init_loop");
+        let init_loop_body = context.append_basic_block(main_fn, "init_loop_body");
+        let init_loop_end = context.append_basic_block(main_fn, "init_loop_end");
+
+        // Initialize loop counter
+        let i = builder.build_alloca(i32_type, "i").unwrap();
+        builder
+            .build_store(i, i32_type.const_int(0, false))
+            .unwrap();
+        builder.build_unconditional_branch(init_loop);
+
+        // Loop condition
+        builder.position_at_end(init_loop);
+        let i_val = builder
+            .build_load(i32_type, i, "i_val")
+            .unwrap()
+            .into_int_value();
+        let cond = builder
+            .build_int_compare(IntPredicate::ULT, i_val, arr_size, "init_cond")
+            .unwrap();
+        builder.build_conditional_branch(cond, init_loop_body, init_loop_end);
+
+        // Loop body: initialize tape with 'X'
+        builder.position_at_end(init_loop_body);
+        let element_ptr = unsafe {
+            builder
+                .build_gep(i8_type, tape_ptr, &[i_val], "element_ptr")
+                .unwrap()
+        };
+        builder
+            .build_store(element_ptr, i8_type.const_int('X' as u64, false))
+            .unwrap();
+        let next_i = builder
+            .build_int_add(i_val, i32_type.const_int(1, false), "next_i")
+            .unwrap();
+        builder.build_store(i, next_i).unwrap();
+        builder.build_unconditional_branch(init_loop);
+
+        builder.position_at_end(init_loop_end);
+
+        // Initialize state
+        let initial_state = self.transitions[0].initial_state.clone();
+        let state_ptr = builder
+            .build_global_string_ptr(&initial_state, "initial_state")
+            .unwrap();
+        let state_ptr_alloca = builder.build_alloca(ptr_type, "state_ptr").unwrap();
+        builder
+            .build_store(state_ptr_alloca, state_ptr.as_pointer_value())
+            .unwrap();
+
+        // Initialize step counter
+        let step_counter = builder.build_alloca(i32_type, "step_counter").unwrap();
+        builder
+            .build_store(step_counter, i32_type.const_int(0, false))
+            .unwrap();
+
+        // Main loop
+        let main_loop = context.append_basic_block(main_fn, "main_loop");
+        let main_loop_end = context.append_basic_block(main_fn, "main_loop_end");
+
+        builder.build_unconditional_branch(main_loop);
+
+        builder.position_at_end(main_loop);
+
+        // Check if we've reached the maximum number of steps
+        let current_step = builder
+            .build_load(i32_type, step_counter, "current_step")
+            .unwrap()
+            .into_int_value();
+        let continue_loop = builder
+            .build_int_compare(IntPredicate::ULT, current_step, num_steps, "continue_loop")
+            .unwrap();
+        builder.build_conditional_branch(continue_loop, main_loop, main_loop_end);
+
+        // Calculate case_value
+        let current_state = builder
+            .build_load(ptr_type, state_ptr_alloca, "current_state")
+            .unwrap();
+        let current_index = builder
+            .build_load(i32_type, index_ptr, "current_index")
+            .unwrap()
+            .into_int_value();
+        let current_symbol_ptr = unsafe {
+            builder
+                .build_gep(i8_type, tape_ptr, &[current_index], "current_symbol_ptr")
+                .unwrap()
+        };
+        let current_symbol = builder
+            .build_load(i8_type, current_symbol_ptr, "current_symbol")
+            .unwrap();
+
+        let case_value = builder
+            .build_call(
+                get_unique_case_value_fn,
+                &[current_state.into(), current_symbol.into()],
+                "case_value",
+            )
+            .unwrap()
+            .try_as_basic_value()
+            .left()
+            .unwrap()
+            .into_int_value();
+
+        // Prepare state and symbol mappings
+        let mut state_symbol_to_int: HashMap<(String, String), u64> = HashMap::new();
+        let mut unique_value = 0;
+        for state in &self.states {
+            for symbol in &self.symbols {
+                state_symbol_to_int.insert((state.clone(), symbol.clone()), unique_value);
+                unique_value += 1;
+            }
+            state_symbol_to_int.insert((state.clone(), "*".to_string()), unique_value);
+            unique_value += 1;
+        }
+
+        // Implement transition logic
+        // Generate basic blocks for transitions
+        let mut transition_blocks: HashMap<u64, BasicBlock> = HashMap::new();
+
+        for transition in &self.transitions {
+            let mut temp_blocks = Vec::new();
+            match &transition.condition {
+                Condition::OR(symbols) => {
+                    for symbol in symbols {
+                        let case_value = state_symbol_to_int
+                            [&(transition.initial_state.clone(), symbol.clone())];
+                        let block = context
+                            .append_basic_block(main_fn, &format!("transition_{}", case_value));
+                        transition_blocks.insert(case_value, block);
+                        temp_blocks.push((case_value, block));
+                    }
+                }
+                Condition::Star => {
+                    let case_value =
+                        state_symbol_to_int[&(transition.initial_state.clone(), "*".to_string())];
+                    let block =
+                        context.append_basic_block(main_fn, &format!("transition_{}", case_value));
+                    transition_blocks.insert(case_value, block);
+                    temp_blocks.push((case_value, block));
+                }
+            }
+
+            // Add instructions for each block in this transition
+            for (case_value, block) in temp_blocks {
+                builder.position_at_end(block);
+
+                // Perform transition steps
+                for step in &transition.steps {
+                    match step {
+                        TransitionStep::R => {
+                            // Move tape head right
+                            let new_index = builder
+                                .build_int_add(
+                                    current_index,
+                                    i32_type.const_int(1, false),
+                                    "new_index",
+                                )
+                                .unwrap();
+                            builder.build_store(index_ptr, new_index).unwrap();
+                        }
+                        TransitionStep::L => {
+                            // Move tape head left
+                            let new_index = builder
+                                .build_int_sub(
+                                    current_index,
+                                    i32_type.const_int(1, false),
+                                    "new_index",
+                                )
+                                .unwrap();
+                            builder.build_store(index_ptr, new_index).unwrap();
+                        }
+                        TransitionStep::X => {
+                            // Do nothing (stay in place)
+                        }
+                        TransitionStep::P(symbol) => {
+                            // Print symbol
+                            let print_format = builder
+                                .build_global_string_ptr("Symbol: %c\n", "print_format")
+                                .unwrap();
+                            builder
+                                .build_call(
+                                    printf_fn,
+                                    &[
+                                        print_format.as_pointer_value().into(),
+                                        i8_type
+                                            .const_int(symbol.chars().next().unwrap() as u64, false)
+                                            .into(),
+                                    ],
+                                    "printf",
+                                )
+                                .unwrap();
+                        }
+                    }
+                }
+
+                // Update state
+                let new_state = builder
+                    .build_global_string_ptr(
+                        &transition.final_state,
+                        &format!("new_state_{}", transition.final_state),
+                    )
+                    .unwrap();
+                builder
+                    .build_store(state_ptr_alloca, new_state.as_pointer_value())
+                    .unwrap();
+
+                // Increment step counter
+                let next_step = builder
+                    .build_int_add(current_step, i32_type.const_int(1, false), "next_step")
+                    .unwrap();
+                builder.build_store(step_counter, next_step).unwrap();
+
+                // Continue loop
+                builder.build_unconditional_branch(main_loop);
+            }
+        }
+
+        // Create switch
+        let switch_block = context.append_basic_block(main_fn, "switch");
+        builder.build_unconditional_branch(switch_block);
+        builder.position_at_end(switch_block);
+
+        let mut switch_cases = Vec::new();
+        for (&case_value, &block) in &transition_blocks {
+            switch_cases.push((i32_type.const_int(case_value, false), block));
+        }
+
+        let default_block = context.append_basic_block(main_fn, "default");
+        builder.build_switch(case_value, default_block, &switch_cases);
+
+        // Default case: continue to next iteration
+        builder.position_at_end(default_block);
+        builder.build_unconditional_branch(main_loop);
+
+        // Main loop end
+        builder.position_at_end(main_loop_end);
+
+        // Return 0
+        builder.build_return(Some(&i32_type.const_int(0, false)));
+
+        // Generate LLVM IR as a string
+        module.print_to_string().to_string()
+    }
+}
+```
+
+This will generate following ir:
+
+```
+; ModuleID = 'tape_machine'
+source_filename = "tape_machine"
+target triple = "arm64-apple-macosx13.0.0"
+
+@num_steps_prompt = private unnamed_addr constant [24 x i8] c"Enter number of steps: \00", align 1
+@scanf_format = private unnamed_addr constant [3 x i8] c"%d\00", align 1
+@arr_size_prompt = private unnamed_addr constant [19 x i8] c"Enter array size: \00", align 1
+@scanf_format.1 = private unnamed_addr constant [3 x i8] c"%d\00", align 1
+@initial_state = private unnamed_addr constant [2 x i8] c"b\00", align 1
+@print_format = private unnamed_addr constant [12 x i8] c"Symbol: %c\0A\00", align 1
+@print_format.2 = private unnamed_addr constant [12 x i8] c"Symbol: %c\0A\00", align 1
+@print_format.3 = private unnamed_addr constant [12 x i8] c"Symbol: %c\0A\00", align 1
+@print_format.4 = private unnamed_addr constant [12 x i8] c"Symbol: %c\0A\00", align 1
+@new_state_o = private unnamed_addr constant [2 x i8] c"o\00", align 1
+@print_format.5 = private unnamed_addr constant [12 x i8] c"Symbol: %c\0A\00", align 1
+@new_state_o.6 = private unnamed_addr constant [2 x i8] c"o\00", align 1
+@new_state_q = private unnamed_addr constant [2 x i8] c"q\00", align 1
+@new_state_q.7 = private unnamed_addr constant [2 x i8] c"q\00", align 1
+@new_state_q.8 = private unnamed_addr constant [2 x i8] c"q\00", align 1
+@print_format.9 = private unnamed_addr constant [12 x i8] c"Symbol: %c\0A\00", align 1
+@new_state_p = private unnamed_addr constant [2 x i8] c"p\00", align 1
+@print_format.10 = private unnamed_addr constant [12 x i8] c"Symbol: %c\0A\00", align 1
+@new_state_q.11 = private unnamed_addr constant [2 x i8] c"q\00", align 1
+@new_state_f = private unnamed_addr constant [2 x i8] c"f\00", align 1
+@new_state_p.12 = private unnamed_addr constant [2 x i8] c"p\00", align 1
+@new_state_f.13 = private unnamed_addr constant [2 x i8] c"f\00", align 1
+@print_format.14 = private unnamed_addr constant [12 x i8] c"Symbol: %c\0A\00", align 1
+@new_state_o.15 = private unnamed_addr constant [2 x i8] c"o\00", align 1
+
+declare i32 @printf(ptr, ...)
+
+declare ptr @malloc(i32)
+
+declare i32 @scanf(ptr, ptr, ...)
+
+declare i32 @strcmp(ptr, ptr)
+
+define i32 @get_unique_case_value(ptr %0, i8 %1) {
+entry:
+  ret i32 42
+}
+
+define i32 @main() {
+entry:
+  %num_steps = alloca i32, align 4
+  %arr_size = alloca i32, align 4
+  %index = alloca i32, align 4
+  store i32 0, ptr %index, align 4
+  %printf = call i32 (ptr, ...) @printf(ptr @num_steps_prompt)
+  %scanf = call i32 (ptr, ptr, ...) @scanf(ptr @scanf_format, ptr %num_steps)
+  %num_steps1 = load i32, ptr %num_steps, align 4
+  %printf2 = call i32 (ptr, ...) @printf(ptr @arr_size_prompt)
+  %scanf3 = call i32 (ptr, ptr, ...) @scanf(ptr @scanf_format.1, ptr %arr_size)
+  %arr_size4 = load i32, ptr %arr_size, align 4
+  %tape_malloc = call ptr @malloc(i32 %arr_size4)
+  %i = alloca i32, align 4
+  store i32 0, ptr %i, align 4
+  br label %init_loop
+
+init_loop:                                        ; preds = %init_loop_body, %entry
+  %i_val = load i32, ptr %i, align 4
+  %init_cond = icmp ult i32 %i_val, %arr_size4
+  br i1 %init_cond, label %init_loop_body, label %init_loop_end
+
+init_loop_body:                                   ; preds = %init_loop
+  %element_ptr = getelementptr i8, ptr %tape_malloc, i32 %i_val
+  store i8 88, ptr %element_ptr, align 1
+  %next_i = add i32 %i_val, 1
+  store i32 %next_i, ptr %i, align 4
+  br label %init_loop
+
+init_loop_end:                                    ; preds = %init_loop
+  %state_ptr = alloca ptr, align 8
+  store ptr @initial_state, ptr %state_ptr, align 8
+  %step_counter = alloca i32, align 4
+  store i32 0, ptr %step_counter, align 4
+  br label %main_loop
+
+main_loop:                                        ; preds = %default, %transition_28, %transition_29, %transition_22, %transition_20, %transition_21, %transition_16, %transition_13, %transition_12, %transition_6, %transition_7, %transition_5, %main_loop, %init_loop_end
+  %current_step = load i32, ptr %step_counter, align 4
+  %continue_loop = icmp ult i32 %current_step, %num_steps1
+  br i1 %continue_loop, label %main_loop, label %main_loop_end
+  %current_state = load ptr, ptr %state_ptr, align 8
+  %current_index = load i32, ptr %index, align 4
+  %current_symbol_ptr = getelementptr i8, ptr %tape_malloc, i32 %current_index
+  %current_symbol = load i8, ptr %current_symbol_ptr, align 1
+  %case_value = call i32 @get_unique_case_value(ptr %current_state, i8 %current_symbol)
+
+main_loop_end:                                    ; preds = %main_loop
+  ret i32 0
+
+transition_5:                                     ; preds = %switch
+  %printf5 = call i32 (ptr, ...) @printf(ptr @print_format, i8 101)
+  %new_index = add i32 %current_index, 1
+  store i32 %new_index, ptr %index, align 4
+  %printf6 = call i32 (ptr, ...) @printf(ptr @print_format.2, i8 101)
+  %new_index7 = add i32 %current_index, 1
+  store i32 %new_index7, ptr %index, align 4
+  %printf8 = call i32 (ptr, ...) @printf(ptr @print_format.3, i8 48)
+  %new_index9 = add i32 %current_index, 1
+  store i32 %new_index9, ptr %index, align 4
+  %new_index10 = add i32 %current_index, 1
+  store i32 %new_index10, ptr %index, align 4
+  %printf11 = call i32 (ptr, ...) @printf(ptr @print_format.4, i8 48)
+  %new_index12 = sub i32 %current_index, 1
+  store i32 %new_index12, ptr %index, align 4
+  %new_index13 = sub i32 %current_index, 1
+  store i32 %new_index13, ptr %index, align 4
+  store ptr @new_state_o, ptr %state_ptr, align 8
+  %next_step = add i32 %current_step, 1
+  store i32 %next_step, ptr %step_counter, align 4
+  br label %main_loop
+
+transition_7:                                     ; preds = %switch
+  %new_index14 = add i32 %current_index, 1
+  store i32 %new_index14, ptr %index, align 4
+  %printf15 = call i32 (ptr, ...) @printf(ptr @print_format.5, i8 120)
+  %new_index16 = sub i32 %current_index, 1
+  store i32 %new_index16, ptr %index, align 4
+  %new_index17 = sub i32 %current_index, 1
+  store i32 %new_index17, ptr %index, align 4
+  %new_index18 = sub i32 %current_index, 1
+  store i32 %new_index18, ptr %index, align 4
+  store ptr @new_state_o.6, ptr %state_ptr, align 8
+  %next_step19 = add i32 %current_step, 1
+  store i32 %next_step19, ptr %step_counter, align 4
+  br label %main_loop
+
+transition_6:                                     ; preds = %switch
+  store ptr @new_state_q, ptr %state_ptr, align 8
+  %next_step20 = add i32 %current_step, 1
+  store i32 %next_step20, ptr %step_counter, align 4
+  br label %main_loop
+
+transition_12:                                    ; preds = %switch
+  %new_index21 = add i32 %current_index, 1
+  store i32 %new_index21, ptr %index, align 4
+  %new_index22 = add i32 %current_index, 1
+  store i32 %new_index22, ptr %index, align 4
+  store ptr @new_state_q.7, ptr %state_ptr, align 8
+  %next_step23 = add i32 %current_step, 1
+  store i32 %next_step23, ptr %step_counter, align 4
+  br label %main_loop
+
+transition_13:                                    ; preds = %switch
+  %new_index24 = add i32 %current_index, 1
+  store i32 %new_index24, ptr %index, align 4
+  %new_index25 = add i32 %current_index, 1
+  store i32 %new_index25, ptr %index, align 4
+  store ptr @new_state_q.8, ptr %state_ptr, align 8
+  %next_step26 = add i32 %current_step, 1
+  store i32 %next_step26, ptr %step_counter, align 4
+  br label %main_loop
+
+transition_16:                                    ; preds = %switch
+  %printf27 = call i32 (ptr, ...) @printf(ptr @print_format.9, i8 49)
+  %new_index28 = sub i32 %current_index, 1
+  store i32 %new_index28, ptr %index, align 4
+  store ptr @new_state_p, ptr %state_ptr, align 8
+  %next_step29 = add i32 %current_step, 1
+  store i32 %next_step29, ptr %step_counter, align 4
+  br label %main_loop
+
+transition_21:                                    ; preds = %switch
+  %printf30 = call i32 (ptr, ...) @printf(ptr @print_format.10, i8 88)
+  %new_index31 = add i32 %current_index, 1
+  store i32 %new_index31, ptr %index, align 4
+  store ptr @new_state_q.11, ptr %state_ptr, align 8
+  %next_step32 = add i32 %current_step, 1
+  store i32 %next_step32, ptr %step_counter, align 4
+  br label %main_loop
+
+transition_20:                                    ; preds = %switch
+  %new_index33 = add i32 %current_index, 1
+  store i32 %new_index33, ptr %index, align 4
+  store ptr @new_state_f, ptr %state_ptr, align 8
+  %next_step34 = add i32 %current_step, 1
+  store i32 %next_step34, ptr %step_counter, align 4
+  br label %main_loop
+
+transition_22:                                    ; preds = %switch
+  %new_index35 = sub i32 %current_index, 1
+  store i32 %new_index35, ptr %index, align 4
+  %new_index36 = sub i32 %current_index, 1
+  store i32 %new_index36, ptr %index, align 4
+  store ptr @new_state_p.12, ptr %state_ptr, align 8
+  %next_step37 = add i32 %current_step, 1
+  store i32 %next_step37, ptr %step_counter, align 4
+  br label %main_loop
+
+transition_29:                                    ; preds = %switch
+  %new_index38 = add i32 %current_index, 1
+  store i32 %new_index38, ptr %index, align 4
+  %new_index39 = add i32 %current_index, 1
+  store i32 %new_index39, ptr %index, align 4
+  store ptr @new_state_f.13, ptr %state_ptr, align 8
+  %next_step40 = add i32 %current_step, 1
+  store i32 %next_step40, ptr %step_counter, align 4
+  br label %main_loop
+
+transition_28:                                    ; preds = %switch
+  %printf41 = call i32 (ptr, ...) @printf(ptr @print_format.14, i8 48)
+  %new_index42 = sub i32 %current_index, 1
+  store i32 %new_index42, ptr %index, align 4
+  %new_index43 = sub i32 %current_index, 1
+  store i32 %new_index43, ptr %index, align 4
+  store ptr @new_state_o.15, ptr %state_ptr, align 8
+  %next_step44 = add i32 %current_step, 1
+  store i32 %next_step44, ptr %step_counter, align 4
+  br label %main_loop
+  br label %switch
+
+switch:                                           ; preds = %transition_28
+  switch i32 %case_value, label %default [
+    i32 6, label %transition_6
+    i32 20, label %transition_20
+    i32 21, label %transition_21
+    i32 16, label %transition_16
+    i32 29, label %transition_29
+    i32 12, label %transition_12
+    i32 22, label %transition_22
+    i32 7, label %transition_7
+    i32 5, label %transition_5
+    i32 13, label %transition_13
+    i32 28, label %transition_28
+  ]
+
+default:                                          ; preds = %switch
+  br label %main_loop
+}
+```
+
+which is incorrect.
+
+
+The task is to fix the llvm converter code, which correctly implements the switch logic.
+The states and transition logic works with string, but since that is inefficient, we will internally
+convert it to numbers ( as is being done in this code) and then use those numbers in appropriate places.
+
+Give me full working code of llvmconverter.rs.
+
+================================================================================
+File: .cargo/config.toml
+================================================================================
+
+[alias]
+run_example = "run --bin state_machine_compiler_rust -- -i example.txt"
+
+[build]
+rustflags = ["-L", "/opt/homebrew/lib"]
+================================================================================
+File: logs/error.txt
+================================================================================
+
+   Compiling state_machine_compiler_rust v0.1.0 (/Users/mabhay/projects/state_machine_compiler_rust)
+warning: unnecessary `unsafe` block
+  --> src/main.rs:83:5
+   |
+83 |     unsafe {
+   |     ^^^^^^ unnecessary `unsafe` block
+   |
+   = note: `#[warn(unused_unsafe)]` on by default
+
+warning: `state_machine_compiler_rust` (bin "state_machine_compiler_rust") generated 1 warning
+    Finished dev [unoptimized + debuginfo] target(s) in 1.62s
+     Running `target/debug/state_machine_compiler_rust -i example.txt`
+[INFO] src/main.rs:54 Lexing the input file
+[INFO] src/lexer.rs:94 Initializing Lexer
+[INFO] src/main.rs:57 Parsing the input file
+[INFO] src/parser.rs:318 Initializing Parser
+[INFO] src/main.rs:63 Generating the dot file
+[INFO] src/main.rs:70 Written the dot file to state_machine.dot
+[INFO] src/main.rs:73 Generating the Rust code
+[INFO] src/main.rs:79 Written the Rust code to src/bin/state_machine.rs
+[INFO] src/main.rs:82 Generating llvm ir 
+[INFO] src/main.rs:89 Written the LLVM IR to state_machine.ll
+
+================================================================================
+File: examples/example.txt
+================================================================================
+
+STATES: [b], o, q, p, f
+
+SYMBOLS: 0, 1, e, x
+
+TRANSITIONS:
+b, *, P(e)-R-P(e)-R-P(0)-R-R-P(0)-L-L, o
+o, 1, R-P(x)-L-L-L, o
+o, 0, X, q
+q, 0 | 1, R-R, q
+q, X, P(1)-L, p
+p, x, P(X)-R, q
+p, e, R, f
+p, X, L-L, p
+f, *, R-R, f
+f, X, P(0)-L-L, o
+================================================================================
+File: examples/01_state_machine.txt
+================================================================================
+
+STATES: [a], b
+
+SYMBOLS: 0,1
+
+TRANSITIONS:
+a, *, P(0), b
+b, 0, R-P(1), b
+b, 1, R-P(0), a
+================================================================================
+File: .github/workflows/tests.yml
+================================================================================
+
+name: Rust
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build_and_test:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose
+
+================================================================================
+File: .vscode/launch.json
+================================================================================
+
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    // Rust debugger configuration for state_machine_compiler_rust
+    "configurations": [
+        {
+            "name": "Rust Example",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/state_machine_compiler_rust",
+            "args": [
+                "--input-file-path",
+                "${workspaceFolder}/example.txt"
+            ],
+        }
+    ]
+}
+================================================================================
+File: src/llvmconverter.rs
+================================================================================
+
+#![allow(unused)]
+use std::collections::{HashMap, HashSet};
+
+use crate::parser::{Condition, ParseTree, Transition, TransitionStep};
+use inkwell::basic_block::BasicBlock;
+use inkwell::context::Context;
+use inkwell::targets::TargetTriple;
+use inkwell::values::{FunctionValue, PointerValue, BasicValueEnum};
+use inkwell::{AddressSpace, IntPredicate};
+
+// Trait for converting to LLVM IR
+pub trait ToLlvmIr {
+    fn to_llvm_ir(&self) -> String;
+}
+
+impl ToLlvmIr for ParseTree {
+    fn to_llvm_ir(&self) -> String {
+        // Create LLVM context, module, and builder
+        let context = Context::create();
+        let module = context.create_module("tape_machine_fixed");
+        let builder = context.create_builder();
+
+        // Set target triple for macOS on ARM64
+        let triple = TargetTriple::create("arm64-apple-macosx13.0.0");
+        module.set_triple(&triple);
+
+        // Define basic LLVM types
+        let i32_type = context.i32_type();
+        let i8_type = context.i8_type();
+        let ptr_type = context.i8_type().ptr_type(AddressSpace::default());
+
+        // Declare external functions (printf, malloc, scanf)
+        let printf_type = i32_type.fn_type(&[ptr_type.into()], true);
+        let printf_fn = module.add_function("printf", printf_type, None);
+
+        let malloc_type = ptr_type.fn_type(&[i32_type.into()], false);
+        let malloc_fn = module.add_function("malloc", malloc_type, None);
+
+        let scanf_type = i32_type.fn_type(&[ptr_type.into()], true);
+        let scanf_fn = module.add_function("scanf", scanf_type, None);
+
+        // Define main function
+        let main_type = i32_type.fn_type(&[], false);
+        let main_fn = module.add_function("main", main_type, None);
+        let entry = context.append_basic_block(main_fn, "entry");
+        builder.position_at_end(entry);
+
+        // Allocate and initialize variables
+        let num_steps_ptr = builder.build_alloca(i32_type, "num_steps");
+        let arr_size_ptr = builder.build_alloca(i32_type, "arr_size");
+        let index_ptr = builder.build_alloca(i32_type, "index");
+        builder.build_store(index_ptr, i32_type.const_int(0, false));
+
+        // Prompt user for input (number of steps)
+        let num_steps_prompt = builder.build_global_string_ptr("Enter number of steps: ", "num_steps_prompt");
+        let scanf_format = builder.build_global_string_ptr("%d", "scanf_format");
+        builder.build_call(printf_fn, &[num_steps_prompt.as_pointer_value().into()], "printf");
+        builder.build_call(scanf_fn, &[scanf_format.as_pointer_value().into(), num_steps_ptr.into()], "scanf");
+
+        // Load num_steps value
+        let num_steps = builder.build_load(i32_type, num_steps_ptr.as_basic_value_enum().into_pointer_value(), "num_steps").into_int_value();
+
+        // Prompt user for input (array size)
+        let arr_size_prompt = builder.build_global_string_ptr("Enter array size: ", "arr_size_prompt");
+        builder.build_call(printf_fn, &[arr_size_prompt.as_pointer_value().into()], "printf");
+        builder.build_call(scanf_fn, &[scanf_format.as_pointer_value().into(), arr_size_ptr.into()], "scanf");
+
+        // Allocate tape dynamically using malloc
+        let arr_size = builder.build_load(i32_type, arr_size_ptr.as_basic_value_enum().into_pointer_value(), "arr_size").into_int_value();
+        let tape_ptr = builder
+            .build_call(malloc_fn, &[arr_size.into()], "tape_malloc")
+            .try_as_basic_value()
+            .left()
+            .unwrap()
+            .into_pointer_value();
+
+        // Initialize tape with 'X'
+        let init_loop = context.append_basic_block(main_fn, "init_loop");
+        let init_loop_body = context.append_basic_block(main_fn, "init_loop_body");
+        let init_loop_end = context.append_basic_block(main_fn, "init_loop_end");
+
+        // Initialize loop counter
+        let i = builder.build_alloca(i32_type, "i");
+        builder.build_store(i, i32_type.const_int(0, false));
+        builder.build_unconditional_branch(init_loop);
+
+        // Loop condition
+        builder.position_at_end(init_loop);
+        let i_val = builder.build_load(i32_type, i.as_basic_value_enum().into_pointer_value(), "i_val").into_int_value();
+        let cond = builder.build_int_compare(IntPredicate::ULT, i_val, arr_size, "init_cond");
+        builder.build_conditional_branch(cond, init_loop_body, init_loop_end);
+
+        // Loop body: initialize tape with 'X'
+        builder.position_at_end(init_loop_body);
+        let element_ptr = unsafe { builder.build_gep(i8_type, tape_ptr, &[i_val], "element_ptr") };
+        builder.build_store(element_ptr, i8_type.const_int('X' as u64, false));
+        let next_i = builder.build_int_add(i_val, i32_type.const_int(1, false), "next_i");
+        builder.build_store(i, next_i);
+        builder.build_unconditional_branch(init_loop);
+
+        builder.position_at_end(init_loop_end);
+
+        // Print the final state of the tape array
+        let print_loop = context.append_basic_block(main_fn, "print_loop");
+        let print_loop_body = context.append_basic_block(main_fn, "print_loop_body");
+        let print_loop_end = context.append_basic_block(main_fn, "print_loop_end");
+
+        // Initialize loop counter for printing
+        builder.build_store(i, i32_type.const_int(0, false));
+        builder.build_unconditional_branch(print_loop);
+
+        // Loop condition for printing
+        builder.position_at_end(print_loop);
+        let i_val_print = builder.build_load(i32_type, i.as_basic_value_enum().into_pointer_value(), "i_val_print").into_int_value();
+        let print_cond = builder.build_int_compare(IntPredicate::ULT, i_val_print, arr_size, "print_cond");
+        builder.build_conditional_branch(print_cond, print_loop_body, print_loop_end);
+
+        // Loop body: print tape values
+        builder.position_at_end(print_loop_body);
+        let element_ptr_print = unsafe { builder.build_gep(i8_type, tape_ptr, &[i_val_print], "element_ptr_print") };
+        let element_val = builder.build_load(i8_type, element_ptr_print, "element_val");
+        let print_array_format = builder.build_global_string_ptr("%c ", "print_array_format");
+        builder.build_call(printf_fn, &[print_array_format.as_pointer_value().into(), element_val.into()], "printf");
+        let next_i_print = builder.build_int_add(i_val_print, i32_type.const_int(1, false), "next_i_print");
+        builder.build_store(i, next_i_print);
+        builder.build_unconditional_branch(print_loop);
+
+        builder.position_at_end(print_loop_end);
+        builder.build_return(Some(&i32_type.const_int(0, false)));
+
+        // Generate LLVM IR as a string
+        module.print_to_string().to_string()
+    }
+}
+
+================================================================================
+File: src/lib.rs
+================================================================================
+
+pub mod lexer;
+pub mod parser;
+pub mod llvmconverter;
+================================================================================
+File: src/a.c
+================================================================================
+
+// A simple switch statement in C
+
+#include <stdio.h>
+
+int main() {
+    // take input from user
+    int x;
+    printf("Enter a number: ");
+    scanf("%d", &x);
+
+    switch (x) {
+        case 1:
+            printf("x is 1\n");
+            break;
+        case 2:
+            printf("x is 2\n");
+            break;
+        default:
+            printf("x is not 1 or 2\n");
+    }
+
+    return 0;
+}
+================================================================================
+File: src/main.rs
+================================================================================
+
+use env_logger::Env;
+use state_machine_compiler_rust::{
+    lexer::Lexer, llvmconverter::ToLlvmIr, parser::{Parser, ToDot}
+};
+use std::{
+    fs::File,
+    io::{Read, Write},
+};
+
+use clap::Parser as ClapParser;
+use log::{debug, error, info};
+// use env_logger::
+
+#[derive(ClapParser, Debug)]
+struct Args {
+    #[arg(short, long)]
+    input_file_path: std::path::PathBuf,
+}
+
+fn main() {
+
+    // Logging initialization
+    env_logger::Builder::from_env(Env::default().default_filter_or("info"))
+        .format(|buf, record| {
+            // Only the module name and the line number are used for filtering
+            writeln!(
+                buf,
+                "[{}] {}:{} {}",
+                record.level(),
+                record.file().unwrap_or(""),
+                record.line().unwrap_or(0),
+                record.args()
+            )
+        })
+        .init();
+
+    // Argument parsing
+    let args = Args::parse();
+    debug!("Command line arguments: {:?}", args);
+
+    let mut file = match File::open(&args.input_file_path) {
+        Ok(file) => file,
+        Err(e) => {
+            error!("Failed to open input file: {}", e);
+            panic!("Failed to open input file: {}", e);
+        }
+    };
+    let mut source = String::new();
+    if let Err(e) = file.read_to_string(&mut source) {
+        error!("Failed to read input file: {}", e);
+        std::process::exit(1);
+    }
+
+    info!("Lexing the input file");
+    let lexer = Lexer::new(&source);
+
+    info!("Parsing the input file");
+    let mut parser = Parser::new(lexer);
+    parser.program();
+
+    debug!("Parsed tree: {:?}", parser.tree);
+
+    info!("Generating the dot file");
+    let dot = parser.tree.to_dot();
+    let dot_file_path = "state_machine.dot";
+    if let Err(e) = File::create(dot_file_path).and_then(|mut file| file.write_all(dot.as_bytes()))
+    {
+        error!("Failed to write the dot file: {}", e);
+    } else {
+        info!("Written the dot file to {}", dot_file_path);
+    }
+
+    info!("Generating the Rust code");
+    let code = parser.tree.to_rust_code();
+    let file_path = "src/bin/state_machine.rs";
+    if let Err(e) = File::create(file_path).and_then(|mut file| file.write_all(code.as_bytes())) {
+        error!("Failed to write the Rust code: {}", e);
+    } else {
+        info!("Written the Rust code to {}", file_path);
+    }
+
+    info!("Generating llvm ir ");
+    unsafe {
+        let llvm_ir = parser.tree.to_llvm_ir();
+        let file_path = "state_machine.ll";
+        if let Err(e) = File::create(file_path).and_then(|mut file| file.write_all(llvm_ir.as_bytes())) {
+            error!("Failed to write the LLVM IR: {}", e);
+        } else {
+            info!("Written the LLVM IR to {}", file_path);
+        }
+    }
+}
+
+================================================================================
+File: src/lexer.rs
+================================================================================
+
+use log::{error, info};
+use std::str::FromStr;
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum TokenType {
+    // Special
+    EOF = -1,
+    NEWLINE = 0,
+
+    // Keywords
+    STATES = 201,
+    SYMBOLS = 202,
+    TRANSITIONS = 203,
+    // Contextual Keywords
+    R = 104,
+    L = 105,
+    X = 106,
+    P = 107,
+
+    // Identifiers : Alphanumerics
+    IDENT = 7,
+
+    // Operators
+    OR = 8,
+    LeftBracket = 9,
+    RightBracket = 10,
+    COMMA = 11,
+    DASH = 12,
+    LeftParen = 13,
+    RightParen = 14,
+    STAR = 15,
+    COLON = 16,
+}
+
+impl FromStr for TokenType {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "EOF" => Ok(TokenType::EOF),
+            "NEWLINE" => Ok(TokenType::NEWLINE),
+            "STATES" => Ok(TokenType::STATES),
+            "SYMBOLS" => Ok(TokenType::SYMBOLS),
+            "TRANSITIONS" => Ok(TokenType::TRANSITIONS),
+            "R" => Ok(TokenType::R),
+            "L" => Ok(TokenType::L),
+            "P" => Ok(TokenType::P),
+            "X" => Ok(TokenType::X),
+            "IDENT" => Ok(TokenType::IDENT),
+            "OR" => Ok(TokenType::OR),
+            "LEFT_BRACKET" => Ok(TokenType::LeftBracket),
+            "RIGHT_BRACKET" => Ok(TokenType::RightBracket),
+            "COMMA" => Ok(TokenType::COMMA),
+            "DASH" => Ok(TokenType::DASH),
+            "LEFT_PAREN" => Ok(TokenType::LeftParen),
+            "RIGHT_PAREN" => Ok(TokenType::RightParen),
+            "STAR" => Ok(TokenType::STAR),
+            "COLON" => Ok(TokenType::COLON),
+            _ => Err(format!("Unknown token type: {}", s)),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Token {
+    pub text: String,
+    pub kind: TokenType,
+}
+
+impl Token {
+    fn check_if_keyword(token_text: &str) -> Option<TokenType> {
+        let token_type = TokenType::from_str(token_text);
+        match token_type {
+            Ok(t) => {
+                if t as i32 > 100 {
+                    Some(t)
+                } else {
+                    None
+                }
+            }
+            Err(_s) => None,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Lexer {
+    source: Vec<char>,
+    pub cur_char: char,
+    cur_pos: usize,
+}
+
+impl Lexer {
+    pub fn new(source: &str) -> Self {
+        info!("Initializing Lexer");
+        let mut source_chars = source.chars().collect::<Vec<_>>();
+        source_chars.push('\n');
+
+        let cur_char = if source_chars.len() > 1 {
+            source_chars[0]
+        } else {
+            '\n'
+        };
+
+        Lexer {
+            source: source_chars,
+            cur_char,
+            cur_pos: 0,
+        }
+    }
+
+    pub fn cur_char(&self) -> char {
+        self.source[self.cur_pos]
+    }
+
+    pub fn next_char(&mut self) {
+        self.cur_pos += 1;
+        if self.cur_pos >= self.source.len() {
+            self.cur_char = '\0'; // EOF
+        } else {
+            self.cur_char = self.source[self.cur_pos];
+        }
+    }
+
+    pub fn peek(&self) -> char {
+        if self.cur_pos + 1 >= self.source.len() {
+            '\0' // EOF
+        } else {
+            self.source[self.cur_pos + 1]
+        }
+    }
+
+    pub fn abort(&self, message: &str) {
+        error!("Lexical Error: {}", message);
+        panic!("Lexical Error: {}", message);
+    }
+
+    fn skip_whitespace(&mut self) {
+        while self.cur_char == ' ' || self.cur_char == '\t' || self.cur_char == '\r' {
+            self.next_char();
+        }
+    }
+
+    fn skip_comment(&mut self) {
+        if self.cur_char == '#' {
+            while self.cur_char != '\n' {
+                self.next_char();
+            }
+        }
+    }
+
+    pub fn get_token(&mut self) -> Option<Token> {
+        self.skip_whitespace();
+        self.skip_comment();
+
+        let token = match self.cur_char {
+            '\n' => Some(Token {
+                text: self.cur_char.to_string(),
+                kind: TokenType::NEWLINE,
+            }),
+            '|' => Some(Token {
+                text: self.cur_char.to_string(),
+                kind: TokenType::OR,
+            }),
+            '[' => Some(Token {
+                text: self.cur_char.to_string(),
+                kind: TokenType::LeftBracket,
+            }),
+            ']' => Some(Token {
+                text: self.cur_char.to_string(),
+                kind: TokenType::RightBracket,
+            }),
+            ',' => Some(Token {
+                text: self.cur_char.to_string(),
+                kind: TokenType::COMMA,
+            }),
+            '-' => Some(Token {
+                text: self.cur_char.to_string(),
+                kind: TokenType::DASH,
+            }),
+            '(' => Some(Token {
+                text: self.cur_char.to_string(),
+                kind: TokenType::LeftParen,
+            }),
+            ')' => Some(Token {
+                text: self.cur_char.to_string(),
+                kind: TokenType::RightParen,
+            }),
+            '*' => Some(Token {
+                text: self.cur_char.to_string(),
+                kind: TokenType::STAR,
+            }),
+            ':' => Some(Token {
+                text: self.cur_char.to_string(),
+                kind: TokenType::COLON,
+            }),
+            '\0' => Some(Token {
+                text: self.cur_char.to_string(),
+                kind: TokenType::EOF,
+            }),
+            _ if self.cur_char.is_alphanumeric() => {
+                let start_pos = self.cur_pos;
+                while self.peek().is_alphanumeric() {
+                    self.next_char();
+                }
+                let tok_text: String = self.source[start_pos..=self.cur_pos].iter().collect();
+                match Token::check_if_keyword(&tok_text) {
+                    Some(keyword) => Some(Token {
+                        text: tok_text,
+                        kind: keyword,
+                    }),
+                    None => Some(Token {
+                        text: tok_text,
+                        kind: TokenType::IDENT,
+                    }),
+                }
+            }
+            _ => {
+                self.abort(&format!("Unknown token: {}", self.cur_char));
+                None
+            }
+        };
+
+        self.next_char();
+        token
+    }
+}
+
+================================================================================
+File: src/parser.rs
+================================================================================
+
+use crate::lexer::{Lexer, Token, TokenType};
+use log::{debug, error, info};
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Condition {
+    OR(Vec<String>),
+    Star,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum TransitionStep {
+    R,
+    L,
+    X,
+    P(String), // A function call
+}
+
+trait FromTokenAndValue {
+    fn from_token_and_value(token: &Token, value: Option<String>) -> Self;
+}
+
+impl FromTokenAndValue for TransitionStep {
+    fn from_token_and_value(token: &Token, value: Option<String>) -> Self {
+        match token.kind {
+            TokenType::R => TransitionStep::R,
+            TokenType::L => TransitionStep::L,
+            TokenType::X => TransitionStep::X,
+            TokenType::P => TransitionStep::P(value.unwrap()),
+            _ => panic!("Invalid token type for TransitionStep"),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Transition {
+    pub initial_state: String,
+    pub condition: Condition,
+    pub steps: Vec<TransitionStep>,
+    pub final_state: String,
+}
+
+impl Transition {
+    pub fn new() -> Self {
+        Transition {
+            initial_state: String::new(),
+            condition: Condition::OR(Vec::new()),
+            steps: Vec::new(),
+            final_state: String::new(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ParseTree {
+    pub states: Vec<String>,
+    pub initial_state: String,
+    pub symbols: Vec<String>,
+    pub transitions: Vec<Transition>,
+}
+
+impl ParseTree {
+    pub fn to_rust_code(&self) -> String {
+        let mut code = String::new();
+
+        // Generate the TapeMachineState enum
+        code.push_str(
+            "use std::fmt;\nuse std::io;\n\n#[derive(Debug, PartialEq, Eq)]\nenum TapeMachineState {\n",
+        );
+        for state in &self.states {
+            code.push_str(&format!("    {},\n", state));
+        }
+        code.push_str("}\n\n");
+
+        // Generate the TapeMachineSymbol enum
+        code.push_str("#[derive(Debug, PartialEq, Eq, Clone)]\nenum TapeMachineSymbol {\n");
+        for symbol in &self.symbols {
+            code.push_str(&format!("    Symbol{},\n", symbol));
+        }
+        code.push_str("}\n\n");
+
+        // Generate the TapeMachineSymbol implementation
+        code.push_str("impl TapeMachineSymbol {\n");
+        code.push_str("    fn as_str(&self) -> &'static str {\n");
+        code.push_str("        match self {\n");
+        code.push_str(
+            &self
+                .symbols
+                .iter()
+                .map(|symbol| {
+                    format!(
+                        "            TapeMachineSymbol::Symbol{} => \"{}\"",
+                        symbol, symbol
+                    )
+                })
+                .collect::<Vec<String>>()
+                .join(",\n"),
+        );
+        code.push_str("\n        }\n");
+        code.push_str("    }\n");
+        code.push_str("}\n\n");
+
+        // Generate the TapeMachine struct
+        code.push_str("struct TapeMachine<'a> {\n    state: &'a TapeMachineState,\n    result: &'a mut Vec<TapeMachineSymbol>,\n    index: usize,\n}\n\n");
+
+        // Generate the TapeMachine implementation
+        code.push_str("impl<'a> TapeMachine<'a> {\n");
+        code.push_str("    pub fn new(state: &'a TapeMachineState, result: &'a mut Vec<TapeMachineSymbol>) -> Self {\n");
+        code.push_str("        Self {\n");
+        code.push_str("            state,\n");
+        code.push_str("            result,\n");
+        code.push_str("            index: 0,\n");
+        code.push_str("        }\n");
+        code.push_str("    }\n\n");
+
+        code.push_str("    fn p(&mut self, symbol: TapeMachineSymbol) {\n");
+        code.push_str("        self.result[self.index] = symbol;\n");
+        code.push_str("    }\n\n");
+
+        code.push_str("    fn r(&mut self) {\n");
+        code.push_str("        self.index += 1;\n");
+        code.push_str("    }\n\n");
+
+        code.push_str("    fn l(&mut self) {\n");
+        code.push_str("        self.index -= 1;\n");
+        code.push_str("    }\n");
+
+        code.push_str("}\n\n");
+
+        // Generate the main function
+        code.push_str("fn main() {\n");
+        code.push_str("    println!(\"Enter the number of steps:\");\n");
+        code.push_str("    let mut steps_input = String::new();\n");
+        code.push_str("    io::stdin().read_line(&mut steps_input).unwrap();\n");
+        code.push_str("    let steps: usize = steps_input.trim().parse().unwrap();\n\n");
+
+        code.push_str("    println!(\"Enter the total tape length:\");\n");
+        code.push_str("    let mut tape_length_input = String::new();\n");
+        code.push_str("    io::stdin().read_line(&mut tape_length_input).unwrap();\n");
+        code.push_str("    let max_len: usize = tape_length_input.trim().parse().unwrap();\n\n");
+        code.push_str("    let mut result = vec![TapeMachineSymbol::SymbolX; max_len];\n");
+        code.push_str(&format!(
+            "    let mut tape_machine = TapeMachine::new(&TapeMachineState::{}, &mut result);\n\n",
+            self.initial_state
+        ));
+
+        code.push_str("    for i in 0..steps {\n");
+        code.push_str("        println!(\"Step: {} State: {:?} Symbol: {:?}\",\n");
+        code.push_str(
+            "            i, tape_machine.state, tape_machine.result[tape_machine.index]);\n\n",
+        );
+
+        code.push_str(
+            "        match (tape_machine.state, &tape_machine.result[tape_machine.index]) {\n",
+        );
+
+        // Sort transitions so that the ones with star condition are executed last
+        // This is to ensure compatibility with switch statements
+        let mut sorted_transitions = self.transitions.clone();
+        sorted_transitions.sort_by(|a, b| {
+            if a.condition == Condition::Star {
+                std::cmp::Ordering::Greater
+            } else if b.condition == Condition::Star {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        });
+        for transition in sorted_transitions {
+            let condition = match &transition.condition {
+                Condition::OR(symbols) => {
+                    let mut condition_str = String::new();
+                    for (i, symbol) in symbols.iter().enumerate() {
+                        condition_str.push_str(&format!("TapeMachineSymbol::Symbol{}", symbol));
+                        if i < symbols.len() - 1 {
+                            condition_str.push_str(" | ");
+                        }
+                    }
+                    condition_str
+                }
+                Condition::Star => "_".to_string(),
+            };
+
+            code.push_str(&format!(
+                "            (TapeMachineState::{}, {}) =>",
+                transition.initial_state, condition
+            ));
+            code.push_str("{\n");
+
+            for step in &transition.steps {
+                match step {
+                    TransitionStep::R => code.push_str("                tape_machine.r();\n"),
+                    TransitionStep::L => code.push_str("                tape_machine.l();\n"),
+                    TransitionStep::X => {
+                        code.push_str("                // X means do nothing\n");
+                    }
+                    TransitionStep::P(symbol) => {
+                        code.push_str(&format!(
+                            "                tape_machine.p(TapeMachineSymbol::Symbol{});\n",
+                            symbol
+                        ));
+                    }
+                }
+            }
+
+            code.push_str(&format!(
+                "                tape_machine.state = &TapeMachineState::{};\n",
+                transition.final_state
+            ));
+            code.push_str(&format!(
+                "                println!(\"Final State: {{:?}}\", TapeMachineState::{});\n",
+                transition.final_state
+            ));
+            code.push_str("            }\n");
+        }
+
+        code.push_str("            (_, _) => {\n");
+        code.push_str("                println!(\"State: {:?} Index: {:?} Symbol: {:?}\", tape_machine.state, tape_machine.index, tape_machine.result[tape_machine.index]);\n");
+        code.push_str("                let binary_result: String = tape_machine.result.iter().map(|x| x.as_str()).collect();\n");
+        code.push_str("                println!(\"{}\", binary_result);\n");
+        code.push_str("                panic!(\"Invalid state reached\");\n");
+        code.push_str("            }\n");
+        code.push_str("        }\n");
+        code.push_str("    }\n\n");
+
+        code.push_str("    let binary_result: String = tape_machine.result.iter().map(|x| x.as_str()).collect();\n");
+        code.push_str("    println!(\"{}\", binary_result);\n");
+        code.push_str("    let clean_result: String = tape_machine.result.iter().filter( |&x| x != &TapeMachineSymbol::SymbolX).map(|x| x.as_str()).collect();\n");
+        code.push_str("    println!(\"=========\\n\");\n");
+        code.push_str("    println!(\"{}\", clean_result);\n");
+        code.push_str("}\n");
+
+        code
+    }
+}
+pub trait ToDot {
+    fn to_dot(&self) -> String;
+}
+
+impl ToDot for ParseTree {
+    fn to_dot(&self) -> String {
+        let mut dot = String::from(
+            "digraph {
+                rankdir=LR;
+                labelloc=\"t\";
+                node [shape=circle, style=filled, fillcolor=lightblue, fontname=\"Arial\"];
+                edge [fontcolor=blue, fontname=\"Arial\"];
+                ",
+        );
+
+        // Define states
+        for state in &self.states {
+            let shape = if state == &self.initial_state {
+                "doublecircle"
+            } else {
+                "circle"
+            };
+            let fillcolor = if state == &self.initial_state {
+                "lightgreen"
+            } else {
+                "lightblue"
+            };
+            let width = if state == &self.initial_state {
+                "1.5"
+            } else {
+                "1.2"
+            };
+            let height = if state == &self.initial_state {
+                "1.5"
+            } else {
+                "1.2"
+            };
+            dot.push_str(&format!(
+                "  \"{}\" [shape={}, fillcolor={}, width={}, height={}]; ",
+                state, shape, fillcolor, width, height
+            ));
+        }
+
+        // Define transitions
+        for transition in &self.transitions {
+            let condition = match &transition.condition {
+                Condition::OR(symbols) => format!("[{}]", symbols.join(",")),
+                Condition::Star => "*".to_string(),
+            };
+            let steps: Vec<String> = transition
+                .steps
+                .iter()
+                .map(|step| match step {
+                    TransitionStep::R => "R".to_string(),
+                    TransitionStep::L => "L".to_string(),
+                    TransitionStep::X => "X".to_string(),
+                    TransitionStep::P(func) => format!("P({})", func),
+                })
+                .collect();
+            let label = format!("{} / {}", condition, steps.join("-"));
+            let color = "black";
+            dot.push_str(&format!(
+                "  \"{}\" -> \"{}\" [label=\"{}\", color={}];
+",
+                transition.initial_state, transition.final_state, label, color
+            ));
+        }
+
+        dot.push_str(" } ");
+        dot
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Parser {
+    lexer: Lexer,
+    cur_token: Token,
+    peek_token: Token,
+    pub tree: ParseTree,
+}
+
+impl Parser {
+    pub fn new(lexer: Lexer) -> Self {
+        info!("Initializing Parser");
+        let mut parser = Parser {
+            lexer,
+            cur_token: Token {
+                text: "\0".to_string(),
+                kind: TokenType::EOF,
+            },
+            peek_token: Token {
+                text: "\0".to_string(),
+                kind: TokenType::EOF,
+            },
+            tree: ParseTree {
+                states: Vec::new(),
+                initial_state: "".to_string(),
+                symbols: Vec::new(),
+                transitions: Vec::new(),
+            },
+        };
+        parser.next_token(); // Initialize peek_token
+        parser.next_token(); // Initialize cur_token
+        parser
+    }
+
+    // Check if the current token matches the expected token type
+    fn check_token(&self, kind: TokenType) -> bool {
+        self.cur_token.kind == kind
+    }
+
+    // Check if the next token has the expected token type
+    fn check_peek(&self, kind: TokenType) -> bool {
+        self.peek_token.kind == kind
+    }
+
+    // Advance to the next token
+    fn next_token(&mut self) {
+        self.cur_token = self.peek_token.clone();
+        self.peek_token = self.lexer.get_token().unwrap_or(Token {
+            text: "\0".to_string(),
+            kind: TokenType::EOF,
+        });
+
+        // If both current and peek token are newline, skip the newline
+        if self.check_token(TokenType::NEWLINE) && self.check_peek(TokenType::NEWLINE) {
+            self.next_token();
+        }
+    }
+
+    // Abort the parsing process with an error message
+    fn abort(&self, message: &str) {
+        error!("Parsing error: {}", message);
+        panic!("Parsing error: {}", message);
+    }
+
+    // Try to consume the current token if it matches the expected token type
+    // If successful, print the token type and text (if available) and execute the optional action
+    // Return true if the token was consumed, false otherwise
+    fn try_consume<F>(&mut self, kind: TokenType, action: Option<F>) -> bool
+    where
+        F: FnMut(&Token),
+    {
+        if self.check_token(kind) {
+            match kind {
+                TokenType::IDENT => debug!("{:?}: {}", kind, self.cur_token.text),
+                _ => debug!("{:?}", kind),
+            }
+
+            if let Some(mut action) = action {
+                action(&self.cur_token);
+            }
+
+            self.next_token();
+            true
+        } else {
+            false
+        }
+    }
+
+    // Consume the current token if it matches the expected token type
+    // If not, abort with an error message
+    // Execute the optional action if provided
+    fn consume<F>(&mut self, expected: TokenType, action: Option<F>)
+    where
+        F: FnMut(&Token),
+    {
+        if !self.try_consume(expected, action) {
+            self.abort(&format!(
+                "Expected {:?}, got {:?}",
+                expected, self.cur_token.kind
+            ));
+        }
+    }
+
+    // Parse an initial state identifier: [IDENT]
+    fn initial_state_identifier(&mut self) {
+        self.consume(TokenType::LeftBracket, None::<fn(&Token)>);
+        let mut initial_state = String::new();
+        self.consume(
+            TokenType::IDENT,
+            Some(|token: &Token| {
+                initial_state.push_str(&token.text);
+            }),
+        );
+        if self.tree.initial_state.is_empty() {
+            self.tree.initial_state = initial_state.clone();
+            self.tree.states.push(initial_state);
+        } else {
+            self.abort("Initial state already defined.");
+        }
+        self.consume(TokenType::RightBracket, None::<fn(&Token)>);
+        debug!("INITIAL_STATE_IDENTIFIER");
+    }
+
+    // Parse a list of state identifiers: IDENT (',' IDENT)*
+    fn state_identifier_list(&mut self) {
+        let mut state_identifiers = Vec::new();
+
+        // Consume all tokens
+        while self.check_token(TokenType::IDENT) || self.check_token(TokenType::LeftBracket) {
+            if self.check_token(TokenType::LeftBracket) {
+                self.initial_state_identifier();
+            } else if !self.try_consume(
+                TokenType::IDENT,
+                Some(|token: &Token| {
+                    state_identifiers.push(token.text.clone());
+                }),
+            ) {
+                break;
+            }
+            if !self.try_consume(TokenType::COMMA, None::<fn(&Token)>) {
+                debug!("STATE_IDENTIFIER_LIST");
+                break;
+            }
+        }
+
+        if self.tree.initial_state.is_empty() {
+            self.abort("Initial state not defined.");
+        }
+
+        // If state identifiers have duplicates, abort with an error message
+        state_identifiers.iter().for_each(|state_identifier| {
+            if self.tree.states.contains(state_identifier) {
+                self.abort(&format!("State {} already defined.", state_identifier));
+            } else {
+                self.tree.states.push(state_identifier.clone());
+            }
+        });
+    }
+
+    // Parse a states declaration: STATES ':' state_identifier_list NEWLINE
+    fn states_declaration(&mut self) {
+        self.consume(TokenType::STATES, None::<fn(&Token)>);
+        self.consume(TokenType::COLON, None::<fn(&Token)>);
+        self.state_identifier_list();
+        self.consume(TokenType::NEWLINE, None::<fn(&Token)>);
+        debug!("STATES_DECLARATION");
+    }
+
+    // Parse a list of symbol identifiers: IDENT (',' IDENT)*
+    fn symbol_identifiers(&mut self) {
+        let mut symbol_identifiers = Vec::new();
+
+        self.consume(
+            TokenType::IDENT,
+            Some(|token: &Token| {
+                symbol_identifiers.push(token.text.clone());
+            }),
+        );
+
+        while self.try_consume(TokenType::COMMA, None::<fn(&Token)>) {
+            self.consume(
+                TokenType::IDENT,
+                Some(|token: &Token| {
+                    symbol_identifiers.push(token.text.clone());
+                }),
+            );
+        }
+        symbol_identifiers.iter().for_each(|symbol_identifier| {
+            if self.tree.symbols.contains(symbol_identifier) {
+                self.abort(&format!("Symbol {} already defined.", symbol_identifier));
+            } else {
+                self.tree.symbols.push(symbol_identifier.clone());
+            }
+        });
+
+        // X is a special symbol
+        self.tree.symbols.push("X".to_string());
+        debug!("SYMBOL_IDENTIFIERS");
+    }
+
+    // Parse a symbols declaration: SYMBOLS ':' symbol_identifiers NEWLINE
+    fn symbols_declaration(&mut self) {
+        self.consume(TokenType::SYMBOLS, None::<fn(&Token)>);
+        self.consume(TokenType::COLON, None::<fn(&Token)>);
+        self.symbol_identifiers();
+        self.consume(TokenType::NEWLINE, None::<fn(&Token)>);
+        debug!("SYMBOLS_DECLARATION");
+    }
+
+    // Parse a transition step: R | L | P '(' IDENT ')' | X
+    fn transition_step(&mut self) {
+        // By default, do nothing
+        let mut step: TransitionStep = TransitionStep::X;
+        if self.try_consume(
+            TokenType::R,
+            Some(|token: &Token| {
+                step = FromTokenAndValue::from_token_and_value(&token.clone(), None);
+            }),
+        ) {
+        } else if self.try_consume(
+            TokenType::L,
+            Some(|token: &Token| {
+                step = FromTokenAndValue::from_token_and_value(&token.clone(), None);
+            }),
+        ) {
+        } else if self.try_consume(
+            TokenType::X,
+            Some(|token: &Token| {
+                step = FromTokenAndValue::from_token_and_value(&token.clone(), None);
+            }),
+        ) {
+        } else if self.try_consume(TokenType::P, None::<fn(&Token)>) {
+            self.consume(TokenType::LeftParen, None::<fn(&Token)>);
+            let mut print_string = String::new();
+            // Either X or a symbol identifier
+            if self.try_consume(
+                TokenType::X,
+                Some(|token: &Token| {
+                    print_string.push_str(&token.text);
+                }),
+            ) {
+            } else {
+                self.consume(
+                    TokenType::IDENT,
+                    Some(|step: &Token| {
+                        print_string.push_str(&step.text);
+                    }),
+                )
+            };
+
+            if !self.tree.symbols.contains(&print_string) {
+                self.abort(&format!(
+                    "Symbol {} not defined, So cannot be printed.",
+                    print_string
+                ));
+            }
+            step = FromTokenAndValue::from_token_and_value(
+                &Token {
+                    text: "P".to_string(),
+                    kind: TokenType::P,
+                },
+                Some(print_string),
+            );
+
+            self.consume(TokenType::RightParen, None::<fn(&Token)>);
+        } else {
+            self.abort(&format!(
+                "Expected {:?} or {:?} or {:?} or {:?} as an action step, got {:?}: {:?}",
+                TokenType::R,
+                TokenType::L,
+                TokenType::P,
+                TokenType::X,
+                self.cur_token.kind,
+                self.cur_token.text
+            ));
+        }
+        self.tree.transitions.last_mut().unwrap().steps.push(step);
+    }
+
+    fn transition_steps(&mut self) {
+        self.transition_step();
+        while self.try_consume(TokenType::DASH, None::<fn(&Token)>) {
+            self.transition_step();
+        }
+        debug!("TRANSITION_STEPS");
+    }
+
+    // Parse a list of transition conditions: IDENT ('|' IDENT)*
+    fn transition_condition_list(&mut self) {
+        let mut conditions: Vec<String> = Vec::new();
+
+        // Consume X as well
+        if self.try_consume(
+            TokenType::X,
+            Some(|token: &Token| {
+                conditions.push(token.text.clone());
+            }),
+        ) {
+        } else {
+            self.consume(
+                TokenType::IDENT,
+                Some(|token: &Token| {
+                    conditions.push(token.text.clone());
+                }),
+            );
+        }
+
+        while self.try_consume(TokenType::OR, None::<fn(&Token)>) {
+            // Consume X as well
+            if self.try_consume(
+                TokenType::X,
+                Some(|token: &Token| {
+                    conditions.push(token.text.clone());
+                }),
+            ) {
+            } else {
+                self.consume(
+                    TokenType::IDENT,
+                    Some(|token: &Token| {
+                        conditions.push(token.text.clone());
+                    }),
+                );
+            }
+        }
+        self.tree.transitions.last_mut().unwrap().condition = Condition::OR(conditions);
+        debug!("TRANSITION_CONDITION_LIST");
+    }
+
+    // Parse transition conditions: '*' | transition_condition_list
+    fn transition_conditions(&mut self) {
+        let mut star_condition = false;
+        if !self.try_consume(
+            TokenType::STAR,
+            Some(|_token: &Token| {
+                star_condition = true;
+            }),
+        ) {
+            self.transition_condition_list();
+        }
+
+        // Override all other conditions with the star condition
+        if star_condition {
+            self.tree.transitions.last_mut().unwrap().condition = Condition::Star;
+        }
+        debug!("TRANSITION_CONDITIONS");
+    }
+
+    // Parse a transition declaration:
+    // IDENT ',' transition_conditions ',' transition_steps ',' IDENT
+    fn transition_declaration(&mut self) {
+        // Initialize a new transition
+        self.tree.transitions.push(Transition::new());
+
+        // Initial state
+        let mut initial_state = String::new();
+        self.consume(
+            TokenType::IDENT,
+            Some(|token: &Token| {
+                initial_state.push_str(&token.text);
+            }),
+        );
+        self.tree.transitions.last_mut().unwrap().initial_state = initial_state;
+
+        debug!("INITIAL_STATE_IDENTIFIER");
+        self.consume(TokenType::COMMA, None::<fn(&Token)>);
+
+        // Conditions
+        self.transition_conditions();
+        self.consume(TokenType::COMMA, None::<fn(&Token)>);
+
+        // Actions
+        self.transition_steps();
+        self.consume(TokenType::COMMA, None::<fn(&Token)>);
+
+        // Final state
+        let mut final_state = String::new();
+        self.consume(
+            TokenType::IDENT,
+            Some(|token: &Token| {
+                final_state.push_str(&token.text);
+            }),
+        );
+        self.tree.transitions.last_mut().unwrap().final_state = final_state;
+        debug!("FINAL_STATE_IDENTIFIER");
+        debug!("TRANSITION_DECLARATION");
+    }
+
+    // Parse transitions declarations:
+    // TRANSITIONS ':' (NEWLINE transition_declaration)*
+    fn transitions_declaration(&mut self) {
+        self.consume(TokenType::TRANSITIONS, None::<fn(&Token)>);
+        self.consume(TokenType::COLON, None::<fn(&Token)>);
+
+        while self.try_consume(TokenType::NEWLINE, None::<fn(&Token)>) {
+            if self.check_token(TokenType::EOF) {
+                break;
+            }
+            self.transition_declaration();
+        }
+        debug!("TRANSITION_DECLARATIONS");
+    }
+
+    // Parse the entire program:
+    // NEWLINE? states_declaration symbols_declaration transitions_declaration NEWLINE? EOF
+    pub fn program(&mut self) {
+        // Consume newlines
+        while self.try_consume(TokenType::NEWLINE, None::<fn(&Token)>) {}
+        self.states_declaration();
+        self.symbols_declaration();
+        self.transitions_declaration();
+        // Consume newlines
+        while self.try_consume(TokenType::NEWLINE, None::<fn(&Token)>) {}
+        self.consume(TokenType::EOF, None::<fn(&Token)>);
+        debug!("PROGRAM");
+    }
+}
+
+================================================================================
+File: src/bin/state_machine.rs
+================================================================================
+
+use std::fmt;
+use std::io;
+
+#[derive(Debug, PartialEq, Eq)]
+enum TapeMachineState {
+    b,
+    o,
+    q,
+    p,
+    f,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+enum TapeMachineSymbol {
+    Symbol0,
+    Symbol1,
+    Symbole,
+    Symbolx,
+    SymbolX,
+}
+
+impl TapeMachineSymbol {
+    fn as_str(&self) -> &'static str {
+        match self {
+            TapeMachineSymbol::Symbol0 => "0",
+            TapeMachineSymbol::Symbol1 => "1",
+            TapeMachineSymbol::Symbole => "e",
+            TapeMachineSymbol::Symbolx => "x",
+            TapeMachineSymbol::SymbolX => "X"
+        }
+    }
+}
+
+struct TapeMachine<'a> {
+    state: &'a TapeMachineState,
+    result: &'a mut Vec<TapeMachineSymbol>,
+    index: usize,
+}
+
+impl<'a> TapeMachine<'a> {
+    pub fn new(state: &'a TapeMachineState, result: &'a mut Vec<TapeMachineSymbol>) -> Self {
+        Self {
+            state,
+            result,
+            index: 0,
+        }
+    }
+
+    fn p(&mut self, symbol: TapeMachineSymbol) {
+        self.result[self.index] = symbol;
+    }
+
+    fn r(&mut self) {
+        self.index += 1;
+    }
+
+    fn l(&mut self) {
+        self.index -= 1;
+    }
+}
+
+fn main() {
+    println!("Enter the number of steps:");
+    let mut steps_input = String::new();
+    io::stdin().read_line(&mut steps_input).unwrap();
+    let steps: usize = steps_input.trim().parse().unwrap();
+
+    println!("Enter the total tape length:");
+    let mut tape_length_input = String::new();
+    io::stdin().read_line(&mut tape_length_input).unwrap();
+    let max_len: usize = tape_length_input.trim().parse().unwrap();
+
+    let mut result = vec![TapeMachineSymbol::SymbolX; max_len];
+    let mut tape_machine = TapeMachine::new(&TapeMachineState::b, &mut result);
+
+    for i in 0..steps {
+        println!("Step: {} State: {:?} Symbol: {:?}",
+            i, tape_machine.state, tape_machine.result[tape_machine.index]);
+
+        match (tape_machine.state, &tape_machine.result[tape_machine.index]) {
+            (TapeMachineState::o, TapeMachineSymbol::Symbol1) =>{
+                tape_machine.r();
+                tape_machine.p(TapeMachineSymbol::Symbolx);
+                tape_machine.l();
+                tape_machine.l();
+                tape_machine.l();
+                tape_machine.state = &TapeMachineState::o;
+                println!("Final State: {:?}", TapeMachineState::o);
+            }
+            (TapeMachineState::o, TapeMachineSymbol::Symbol0) =>{
+                // X means do nothing
+                tape_machine.state = &TapeMachineState::q;
+                println!("Final State: {:?}", TapeMachineState::q);
+            }
+            (TapeMachineState::q, TapeMachineSymbol::Symbol0 | TapeMachineSymbol::Symbol1) =>{
+                tape_machine.r();
+                tape_machine.r();
+                tape_machine.state = &TapeMachineState::q;
+                println!("Final State: {:?}", TapeMachineState::q);
+            }
+            (TapeMachineState::q, TapeMachineSymbol::SymbolX) =>{
+                tape_machine.p(TapeMachineSymbol::Symbol1);
+                tape_machine.l();
+                tape_machine.state = &TapeMachineState::p;
+                println!("Final State: {:?}", TapeMachineState::p);
+            }
+            (TapeMachineState::p, TapeMachineSymbol::Symbolx) =>{
+                tape_machine.p(TapeMachineSymbol::SymbolX);
+                tape_machine.r();
+                tape_machine.state = &TapeMachineState::q;
+                println!("Final State: {:?}", TapeMachineState::q);
+            }
+            (TapeMachineState::p, TapeMachineSymbol::Symbole) =>{
+                tape_machine.r();
+                tape_machine.state = &TapeMachineState::f;
+                println!("Final State: {:?}", TapeMachineState::f);
+            }
+            (TapeMachineState::p, TapeMachineSymbol::SymbolX) =>{
+                tape_machine.l();
+                tape_machine.l();
+                tape_machine.state = &TapeMachineState::p;
+                println!("Final State: {:?}", TapeMachineState::p);
+            }
+            (TapeMachineState::f, TapeMachineSymbol::SymbolX) =>{
+                tape_machine.p(TapeMachineSymbol::Symbol0);
+                tape_machine.l();
+                tape_machine.l();
+                tape_machine.state = &TapeMachineState::o;
+                println!("Final State: {:?}", TapeMachineState::o);
+            }
+            (TapeMachineState::b, _) =>{
+                tape_machine.p(TapeMachineSymbol::Symbole);
+                tape_machine.r();
+                tape_machine.p(TapeMachineSymbol::Symbole);
+                tape_machine.r();
+                tape_machine.p(TapeMachineSymbol::Symbol0);
+                tape_machine.r();
+                tape_machine.r();
+                tape_machine.p(TapeMachineSymbol::Symbol0);
+                tape_machine.l();
+                tape_machine.l();
+                tape_machine.state = &TapeMachineState::o;
+                println!("Final State: {:?}", TapeMachineState::o);
+            }
+            (TapeMachineState::f, _) =>{
+                tape_machine.r();
+                tape_machine.r();
+                tape_machine.state = &TapeMachineState::f;
+                println!("Final State: {:?}", TapeMachineState::f);
+            }
+            (_, _) => {
+                println!("State: {:?} Index: {:?} Symbol: {:?}", tape_machine.state, tape_machine.index, tape_machine.result[tape_machine.index]);
+                let binary_result: String = tape_machine.result.iter().map(|x| x.as_str()).collect();
+                println!("{}", binary_result);
+                panic!("Invalid state reached");
+            }
+        }
+    }
+
+    let binary_result: String = tape_machine.result.iter().map(|x| x.as_str()).collect();
+    println!("{}", binary_result);
+    let clean_result: String = tape_machine.result.iter().filter( |&x| x != &TapeMachineSymbol::SymbolX).map(|x| x.as_str()).collect();
+    println!("=========\n");
+    println!("{}", clean_result);
+}
+
+================================================================================
+File: src/bin/state_machine_macro.rs
+================================================================================
+
+#[macro_export]
+macro_rules! states {
+    ( $( $x: ident),* ) => {
+        // {
+            #[derive(Debug)]
+            enum TapeMachineState {
+                $(
+                    $x,
+                )*
+            }
+        impl TapeMachineState {
+            fn as_str(&self) -> &'static str {
+                match self {
+                    $(
+                        TapeMachineState::$x => stringify!($x),
+                    )*
+                }
+            }
+        }
+        // }
+    };
+}
+
+/*
+
+States : B, O, Q, P, F
+
+Symbols : 0, 1, X
+
+Defaults: B(Blank), A(all)
+
+Moves: L(Moves left), R(Moves right), P_x(Prints x), E(erase)
+
+max_len = 100_000
+max_steps = 10_000
+*/
+
+macro_rules! symbols {
+    ( $(($x: ident, $y: literal)),* ) => {
+        #[derive(Debug)]
+        enum TapeMachineSymbol {
+            $(
+                $x,
+            )*
+            B,
+            E,
+            A,
+        }
+
+        impl TapeMachineSymbol {
+            fn as_str(&self) -> &'static str {
+                match self {
+                    $(
+                        TapeMachineSymbol::$x => $y,
+                    )*
+                    TapeMachineSymbol::B => "",
+                    TapeMachineSymbol::E => "",
+                    TapeMachineSymbol::A => "*",
+                }
+            }
+        }
+    };
+}
+
+// macro_rules! actions {
+//     ( $(($x: ident, $y: literal)),* ) => {
+//         #[derive(Debug)]
+//         enum TapeMachineAction {
+//             R,
+//             L,
+//             P,
+//             E,
+//         }
+//     };
+// }
+
+macro_rules! init_tape {
+    () => {
+        #[derive(Debug)]
+        struct TapeMachine<'a> {
+            state: &'a TapeMachineState,
+            result: &'a mut Vec<&'a TapeMachineSymbol>,
+            index: usize,
+        }
+
+        impl<'a> TapeMachine<'a> {
+            pub fn new(
+                state: &'a TapeMachineState,
+                result: &'a mut Vec<&'a TapeMachineSymbol>,
+            ) -> TapeMachine<'a> {
+                return TapeMachine {
+                    state,
+                    result,
+                    index: 0usize,
+                };
+            }
+        }
+
+        fn p<'a>(c: &'a TapeMachineSymbol, index: usize, vec: &mut [&'a TapeMachineSymbol]) {
+            vec[index] = &c;
+        }
+
+        fn r(index: &mut usize) {
+            *index += 1;
+        }
+
+        fn l(index: &mut usize) {
+            *index -= 1;
+        }
+    };
+}
+
+macro_rules! process_action {
+    (A) => {
+        _
+    };
+    ($action: ident) => {
+        TapeMachineSymbol::$action
+    };
+}
+
+macro_rules! transition_rules {
+    ($tape_machine: ident, $steps: ident, $({ [$state: ident], [$($condition: ident)|+], [$($action: expr),*], [$final_state: ident] } ),* )=> {
+        for i in 0..$steps {
+            println!(
+                "Step: {} State: {:?} Symbol: {:?}",i,
+                $tape_machine.state, $tape_machine.result[$tape_machine.index]
+            );
+            match($tape_machine.state, $tape_machine.result[$tape_machine.index]) {
+                $(
+                    (TapeMachineState::$state,
+                        $(
+                            process_action!($condition)
+                        ) | *
+                    ) => {
+                            $(
+                                $action;
+                            )*
+                            $tape_machine.state = &TapeMachineState::$final_state;
+                            println!("Final State: {:?}", TapeMachineState::$final_state);
+                        }
+                )*
+                (_, _) => {
+                    println!(
+                        "{:?} {:?}",
+                        $tape_machine.state, $tape_machine.result[$tape_machine.index]
+                    );
+                    panic!("Invalid state reached");
+                }
+            }
+        }
+    };
+}
+
+// states!(B, O, Q, P, F);
+// symbols!((Zero, "0"), (One, "1"), (X, "x"));
+// init_tape!();
+states!(A, B);
+symbols!((Zero, "0"), (One, "1"), (X, "x"));
+init_tape!();
+
+// 0010110111011110111110111111011111110111111110111111111
+
+// To test: rustc +nightly -Zunpretty=expanded src/main.rs
+
+macro_rules! P {
+    ($tape_machine: ident, $symbol: ident) => {
+        p(
+            &TapeMachineSymbol::$symbol,
+            $tape_machine.index,
+            $tape_machine.result,
+        )
+    };
+}
+
+macro_rules! R {
+    ($tape_machine: ident) => {
+        r(&mut $tape_machine.index)
+    };
+}
+
+macro_rules! L {
+    ($tape_machine: ident) => {
+        l(&mut $tape_machine.index)
+    };
+}
+
+macro_rules! E {
+    ($tape_machine: ident) => {
+        P!($tape_machine, B)
+    };
+}
+
+fn main() {
+    let max_len = 1000;
+    let steps = 100;
+    let mut result: Vec<&TapeMachineSymbol> = vec![&TapeMachineSymbol::B; max_len];
+    // A is the initial state
+    let mut tape_machine = TapeMachine::new(&TapeMachineState::A, &mut result);
+    transition_rules!(
+        tape_machine,
+        steps,
+        {[A], [A], [P!(tape_machine, Zero)],[B]},
+        {[B], [Zero], [R!(tape_machine), P!(tape_machine, One)], [B]},
+        {[B], [One], [R!(tape_machine)], [A]}
+    );
+
+    let binary_result = tape_machine
+        .result
+        .iter()
+        .map(|x| x.as_str())
+        .collect::<String>();
+
+    // 010101..
+    println!("{}", binary_result);
+}
+
+// fn main() {
+//     let max_len = 1000;
+//     let steps = 100;
+//     let mut result: Vec<&TapeMachineSymbol> = vec![&TapeMachineSymbol::B; max_len];
+//     let mut tape_machine = TapeMachine::new(&TapeMachineState::B, &mut result);
+//     transition_rules!(
+//         tape_machine,
+//         steps,
+//         { [B], [A], [P!(tape_machine, E), R!(tape_machine), P!(tape_machine, E), R!(tape_machine), P!(tape_machine, Zero), R!(tape_machine), R!(tape_machine), P!(tape_machine, Zero), L!(tape_machine), L!(tape_machine)], [O] },
+//         { [O], [One], [R!(tape_machine), P!(tape_machine, X), L!(tape_machine), L!(tape_machine), L!(tape_machine)], [O] },
+//         { [O], [Zero], [], [Q] },
+//         { [Q], [Zero | One], [R!(tape_machine), R!(tape_machine)], [Q] },
+//         { [Q], [B], [P!(tape_machine, One), L!(tape_machine)], [P] },
+//         { [P], [X], [E!(tape_machine), R!(tape_machine)], [Q] },
+//         { [P], [E], [R!(tape_machine)], [F] },
+//         { [P], [B], [L!(tape_machine), L!(tape_machine)], [P] },
+//         { [F], [B], [P!(tape_machine, Zero), L!(tape_machine), L!(tape_machine)], [O] },
+//         { [F], [A], [R!(tape_machine), R!(tape_machine)], [F] }
+//     );
+//     let binary_result = tape_machine
+//         .result
+//         .iter()
+//         .map(|x| x.as_str())
+//         .collect::<String>();
+//     println!("{}", binary_result);
+// }
