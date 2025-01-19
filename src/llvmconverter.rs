@@ -46,9 +46,9 @@ impl ToLlvmIr for ParseTree {
         builder.position_at_end(entry);
 
         // Allocate and initialize variables
-        let num_steps_ptr = builder.build_alloca(i32_type, "num_steps").unwrap();
-        let arr_size_ptr = builder.build_alloca(i32_type, "arr_size").unwrap();
-        let index_ptr = builder.build_alloca(i32_type, "index").unwrap();
+        let num_steps_ptr = builder.build_alloca(i32_type, "num_steps_ptr").unwrap();
+        let arr_size_ptr = builder.build_alloca(i32_type, "arr_size_ptr").unwrap();
+        let index_ptr = builder.build_alloca(i32_type, "index_ptr").unwrap();
         let i32_0 = i32_type.const_int(0, false);
         builder.build_store(index_ptr, i32_0);
         // builder.build_store(index_ptr, i32_type.const_int(0, false));
@@ -56,8 +56,8 @@ impl ToLlvmIr for ParseTree {
         // Prompt user for input (number of steps)
         let num_steps_prompt = builder.build_global_string_ptr("Enter number of steps: ", "num_steps_prompt").unwrap();
         let scanf_format = builder.build_global_string_ptr("%d", "scanf_format").unwrap();
-        builder.build_call(printf_fn, &[num_steps_prompt.as_pointer_value().into()], "printf");
-        builder.build_call(scanf_fn, &[scanf_format.as_pointer_value().into(), num_steps_ptr.into()], "scanf");
+        builder.build_call(printf_fn, &[num_steps_prompt.as_pointer_value().into()], "printf_call_1");
+        builder.build_call(scanf_fn, &[scanf_format.as_pointer_value().into(), num_steps_ptr.into()], "scanf_call_1");
 
         // Load num_steps value
         let num_steps = builder.build_load(i32_type, num_steps_ptr, "num_steps");
@@ -65,45 +65,52 @@ impl ToLlvmIr for ParseTree {
 
         // Prompt user for input (array size)
         let arr_size_prompt = builder.build_global_string_ptr("Enter array size: ", "arr_size_prompt").unwrap();
-        builder.build_call(printf_fn, &[arr_size_prompt.as_pointer_value().into()], "printf");
-        builder.build_call(scanf_fn, &[scanf_format.as_pointer_value().into(), arr_size_ptr.into()], "scanf");
+        builder.build_call(printf_fn, &[arr_size_prompt.as_pointer_value().into()], "printf_call_2");
+        builder.build_call(scanf_fn, &[scanf_format.as_pointer_value().into(), arr_size_ptr.into()], "scanf_call_2");
 
         // Allocate tape dynamically using malloc
         let arr_size = builder.build_load(i32_type, arr_size_ptr, "arr_size").unwrap().into_int_value();
         let tape_ptr = 
                     builder.
-                        build_call(malloc_fn, &[arr_size.into()], "tape_malloc")
+                        build_call(malloc_fn, &[arr_size.into()], "tape_array_malloc_call")
                         .unwrap()
                         .try_as_basic_value()
                         .left()
                         .unwrap()
                         .into_pointer_value();
 
-        // let tape_ptr = builder
-        //     .build_call(malloc_fn, &[arr_size.into()], "tape_malloc")
-        //     .try_as_basic_value()
-        //     .left()
-        //     .unwrap()
-        //     .into_pointer_value();
-
         // Initialize tape with 'X'
-        // let init_loop = context.append_basic_block(main_fn, "init_loop");
-        // let init_loop_body = context.append_basic_block(main_fn, "init_loop_body");
-        // let init_loop_end = context.append_basic_block(main_fn, "init_loop_end");
+        let init_loop = context.append_basic_block(main_fn, "init_loop");
+        let init_loop_body = context.append_basic_block(main_fn, "init_loop_body");
+        let init_loop_end = context.append_basic_block(main_fn, "init_loop_end");
+        let main_return = context.append_basic_block(main_fn, "main_return");
 
-        // // Initialize loop counter
-        // let i = builder.build_alloca(i32_type, "i");
-        // builder.build_store(i, i32_type.const_int(0, false));
-        // builder.build_unconditional_branch(init_loop);
+        // Initialize loop counter
+        builder.build_store(index_ptr, i32_0);
+        builder.build_unconditional_branch(init_loop);
 
-        // // Loop condition
-        // builder.position_at_end(init_loop);
-        // let i_val = builder.build_load(i32_type, i.as_basic_value_enum().into_pointer_value(), "i_val").into_int_value();
-        // let cond = builder.build_int_compare(IntPredicate::ULT, i_val, arr_size, "init_cond");
-        // builder.build_conditional_branch(cond, init_loop_body, init_loop_end);
+        // Loop condition
+        builder.position_at_end(init_loop);
+        let index_val = builder.build_load(i32_type, index_ptr, "index_val").unwrap().into_int_value();
+        let cond = builder.build_int_compare(IntPredicate::ULT, index_val, arr_size, "init_cond").unwrap();
+        builder.build_conditional_branch(cond, init_loop_body, init_loop_end);
 
         // // Loop body: initialize tape with 'X'
-        // builder.position_at_end(init_loop_body);
+        builder.position_at_end(init_loop_body);
+        let print_integer_format = builder.build_global_string_ptr("Integer: %d\n", "print_integer_format").unwrap();
+        builder.build_call(printf_fn, &[print_integer_format.as_pointer_value().into(), index_val.into()], "array_index_print_call");
+        let updated_index_val =  builder.build_int_add(index_val, i32_type.const_int(1, false), "array_increment").unwrap();
+        builder.build_store(index_ptr, updated_index_val);
+        builder.build_unconditional_branch(init_loop);
+
+
+        // Loop end
+        builder.position_at_end(init_loop_end);
+        let print_loop_end_format = builder.build_global_string_ptr("Reached end of loop.", "loop_end_format").unwrap();
+        builder.build_call(printf_fn, &[print_loop_end_format.as_pointer_value().into()], "loop_end_print");
+        builder.build_unconditional_branch(main_return);
+
+
         // let element_ptr = unsafe { builder.build_gep(i8_type, tape_ptr, &[i_val], "element_ptr") };
         // builder.build_store(element_ptr, i8_type.const_int('X' as u64, false));
         // let next_i = builder.build_int_add(i_val, i32_type.const_int(1, false), "next_i");
@@ -138,8 +145,10 @@ impl ToLlvmIr for ParseTree {
         // builder.build_unconditional_branch(print_loop);
 
         // builder.position_at_end(print_loop_end);
+
+        builder.position_at_end(main_return);
         builder.build_return(Some(&i32_type.const_int(0, false)));
-        
+
 
         // Generate LLVM IR as a string
         module.print_to_string().to_string()
