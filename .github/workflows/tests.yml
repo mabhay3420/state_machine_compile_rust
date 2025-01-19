@@ -19,6 +19,6 @@ jobs:
     - name: Install Nix
       uses: cachix/install-nix-action@v17
     - name: Build
-      run: nix-shell --command cargo build --verbose
+      run: nix-shell --run 'cargo build --verbose'
     - name: Run tests
-      run: nix-shell --command cargo test --verbose
+      run: nix-shell --run 'cargo test --verbose'
