@@ -80,7 +80,7 @@ fn main() {
     }
 
     info!("Generating llvm ir ");
-    unsafe {
+    // unsafe {
         let llvm_ir = parser.tree.to_llvm_ir();
         let file_path = "state_machine.ll";
         if let Err(e) = File::create(file_path).and_then(|mut file| file.write_all(llvm_ir.as_bytes())) {
@@ -88,5 +88,5 @@ fn main() {
         } else {
             info!("Written the LLVM IR to {}", file_path);
         }
-    }
+    // }
 }

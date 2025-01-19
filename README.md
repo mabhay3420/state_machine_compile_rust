@@ -55,7 +55,7 @@ cargo run_example
 
 Clone the repository and run the following commands:
 
-1. Try with the [example.txt](example.txt) file:
+1. Try with the [example.txt](examples/example.txt) file:
 
    ```bash
    cargo run --bin state_machine_compiler_rust -- -i example.txt
@@ -66,12 +66,10 @@ Clone the repository and run the following commands:
 3. To enable debug logging, set the `RUST_LOG` environment variable to `debug`.
 
    ```bash
-   RUST_LOG=debug cargo run --bin state_machine_compiler_rust -- -i example.txt
+   RUST_LOG=debug cargo run --bin state_machine_compiler_rust -- -i examples/example.txt
    ```
 
-<details>
-<summary>If you are working with executable, then refer to following doc
-</summary>
+If you are working with executable, then refer to following doc
 
 ```bash
 Usage: state_machine_compiler_rust --input-file-path <INPUT_FILE_PATH>
@@ -83,7 +81,7 @@ Options:
 
 ## Output
 
-Two files:
+Few files:
 
 1. `src/bin/state_machine.rs`
 
@@ -101,8 +99,13 @@ Two files:
    - The cleaned tape content ( erasing the `X` symbol which stands for empty tape content)
 
 2. `state_machine.dot` is the state machine diagram.
+3. `state_machine.ll` is the LLVM IR code implementing similar functionality
 
-</details>
+To run the generated IR code, simply take a look at [run_output.sh](./run_output.sh) script.
+
+```bash
+./run_output.sh
+```
 
 ## Implementation
 
