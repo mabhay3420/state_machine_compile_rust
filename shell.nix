@@ -11,6 +11,7 @@ pkgs.mkShell {
     pkgs.rustc            # Rust compiler
     pkgs.cargo            # Rust package manager
     pkgs.rust-analyzer    # Rust language server (optional)
+    pkgs.clippy           # Rust linter
 
     # general setup
     pkgs.zsh              # Zsh shell
@@ -28,11 +29,11 @@ pkgs.mkShell {
     # version control baby
     pkgs.git
   ];
+  RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
 
   # Define environment variables and shell configurations
   shellHook = ''
     # Set environment variables
-    # export LLVM_SOURCE_DIR="/Users/mabhay/projects/llvm-project-llvmorg-18.1.8"
 
     echo ">> Going to use vim in shell - change this if you don't like that"
     # Use Vi keybindings in Zsh
