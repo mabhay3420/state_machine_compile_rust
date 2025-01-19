@@ -48,9 +48,8 @@ impl ToLlvmIr for ParseTree {
         // Allocate and initialize variables
         let num_steps_ptr = builder.build_alloca(i32_type, "num_steps_ptr").unwrap();
         let arr_size_ptr = builder.build_alloca(i32_type, "arr_size_ptr").unwrap();
-        let index_ptr = builder.build_alloca(i32_type, "index_ptr").unwrap();
         let i32_0 = i32_type.const_int(0, false);
-        builder.build_store(index_ptr, i32_0);
+        // builder.build_store(index_ptr, i32_0);
         // builder.build_store(index_ptr, i32_type.const_int(0, false));
 
         // Prompt user for input (number of steps)
@@ -60,7 +59,7 @@ impl ToLlvmIr for ParseTree {
         builder.build_call(scanf_fn, &[scanf_format.as_pointer_value().into(), num_steps_ptr.into()], "scanf_call_1");
 
         // Load num_steps value
-        let num_steps = builder.build_load(i32_type, num_steps_ptr, "num_steps");
+        let num_steps = builder.build_load(i32_type, num_steps_ptr, "num_steps").unwrap().into_int_value();
         // let num_steps = builder.build_load(i32_type, num_steps_ptr.as_basic_value_enum().into_pointer_value(), "num_steps").into_int_value();
 
         // Prompt user for input (array size)
@@ -80,34 +79,37 @@ impl ToLlvmIr for ParseTree {
                         .into_pointer_value();
 
         // Initialize tape with 'X'
-        let init_loop = context.append_basic_block(main_fn, "init_loop");
-        let init_loop_body = context.append_basic_block(main_fn, "init_loop_body");
-        let init_loop_end = context.append_basic_block(main_fn, "init_loop_end");
+        let steps_loop = context.append_basic_block(main_fn, "steps_loop");
+        let steps_loop_body = context.append_basic_block(main_fn, "steps_loop_body");
+        let steps_loop_end = context.append_basic_block(main_fn, "steps_loop_end");
         let main_return = context.append_basic_block(main_fn, "main_return");
 
         // Initialize loop counter
+        let index_ptr = builder.build_alloca(i32_type, "index_ptr").unwrap();
+        let current_step_ptr = builder.build_alloca(i32_type, "current_step_ptr").unwrap();
         builder.build_store(index_ptr, i32_0);
-        builder.build_unconditional_branch(init_loop);
+        builder.build_store(current_step_ptr, i32_0);
+        builder.build_unconditional_branch(steps_loop);
 
         // Loop condition
-        builder.position_at_end(init_loop);
-        let index_val = builder.build_load(i32_type, index_ptr, "index_val").unwrap().into_int_value();
-        let cond = builder.build_int_compare(IntPredicate::ULT, index_val, arr_size, "init_cond").unwrap();
-        builder.build_conditional_branch(cond, init_loop_body, init_loop_end);
+        builder.position_at_end(steps_loop);
+        let current_step_val = builder.build_load(i32_type, current_step_ptr, "current_step_val").unwrap().into_int_value();
+        let step_limit_cond = builder.build_int_compare(IntPredicate::ULT, current_step_val, num_steps, "step_limit_cond").unwrap();
+        builder.build_conditional_branch(step_limit_cond, steps_loop_body, steps_loop_end);
 
         // // Loop body: initialize tape with 'X'
-        builder.position_at_end(init_loop_body);
-        let print_integer_format = builder.build_global_string_ptr("Integer: %d\n", "print_integer_format").unwrap();
-        builder.build_call(printf_fn, &[print_integer_format.as_pointer_value().into(), index_val.into()], "array_index_print_call");
-        let updated_index_val =  builder.build_int_add(index_val, i32_type.const_int(1, false), "array_increment").unwrap();
-        builder.build_store(index_ptr, updated_index_val);
-        builder.build_unconditional_branch(init_loop);
+        builder.position_at_end(steps_loop_body);
+        let print_steps_format = builder.build_global_string_ptr("Current step: %d\n", "print_current_step_format").unwrap();
+        builder.build_call(printf_fn, &[print_steps_format.as_pointer_value().into(), current_step_val.into()], "current_step_print_call");
+        let updated_current_step_val =  builder.build_int_add(current_step_val, i32_type.const_int(1, false), "current_step_increment").unwrap();
+        builder.build_store(current_step_ptr, updated_current_step_val);
+        builder.build_unconditional_branch(steps_loop);
 
 
         // Loop end
-        builder.position_at_end(init_loop_end);
-        let print_loop_end_format = builder.build_global_string_ptr("Reached end of loop.", "loop_end_format").unwrap();
-        builder.build_call(printf_fn, &[print_loop_end_format.as_pointer_value().into()], "loop_end_print");
+        builder.position_at_end(steps_loop_end);
+        let print_loop_end_format = builder.build_global_string_ptr("Reached end of steps loop.", "step_loop_end_format").unwrap();
+        builder.build_call(printf_fn, &[print_loop_end_format.as_pointer_value().into()], "step_loop_end_print");
         builder.build_unconditional_branch(main_return);
 
 
