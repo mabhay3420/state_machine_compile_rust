@@ -5,7 +5,7 @@ use crate::parser::{Condition, ParseTree, Transition, TransitionStep};
 use inkwell::basic_block::BasicBlock;
 use inkwell::context::Context;
 use inkwell::targets::TargetTriple;
-use inkwell::values::{FunctionValue, PointerValue, BasicValueEnum};
+use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue};
 use inkwell::{AddressSpace, IntPredicate};
 
 // Trait for converting to LLVM IR
@@ -13,7 +13,17 @@ pub trait ToLlvmIr {
     fn to_llvm_ir(&self) -> String;
 }
 
+// TODO - Write this to minimise the work for printing something
+// fn print_call(builder: inkwell::builder::Builder, prompt: &str, name: &str, printf_fn: inkwell::values::FunctionValue, print_args: &[inkwell::values::BasicValueEnum], print_call_name: &str) {
+//     let print_steps_format = builder.build_global_string_ptr(prompt, name).unwrap();
+//     let mut print_all_args = [print_steps_format.as_basic_value_enum()];
+//     print_all_args.iter().chain(print_args);
+//     builder.build_call(printf_fn, &print_all_args,print_call_name);
+// }
+
 impl ToLlvmIr for ParseTree {
+
+
     fn to_llvm_ir(&self) -> String {
         // Create LLVM context, module, and builder
         let context = Context::create();
@@ -101,6 +111,41 @@ impl ToLlvmIr for ParseTree {
         builder.position_at_end(steps_loop_body);
         let print_steps_format = builder.build_global_string_ptr("Current step: %d\n", "print_current_step_format").unwrap();
         builder.build_call(printf_fn, &[print_steps_format.as_pointer_value().into(), current_step_val.into()], "current_step_print_call");
+
+        // Build a switch statement based on current step value
+        let current_step_nature = builder.build_int_signed_rem(current_step_val, i32_type.const_int(4, false), "is_even_check").unwrap();
+        // Later we will use the current state and current symbol value
+        let switch_default = context.append_basic_block(main_fn, "switch_default");
+        let switch_even_case = context.append_basic_block(main_fn, "switch_0");
+        let switch_odd_case = context.append_basic_block(main_fn, "switch_1");
+        let after_switch = context.append_basic_block(main_fn, "after_switch");
+
+        builder.position_at_end(switch_default);
+        let print_steps_format = builder.build_global_string_ptr("Default Remainder: %d\n", "print_current_step_format").unwrap();
+        builder.build_call(printf_fn, &[print_steps_format.as_pointer_value().into(), current_step_val.into()], "current_step_print_call");
+        builder.build_unconditional_branch(after_switch);
+
+        builder.position_at_end(switch_even_case);
+        let print_steps_format = builder.build_global_string_ptr("Remainder 0: %d\n", "print_current_step_format").unwrap();
+        builder.build_call(printf_fn, &[print_steps_format.as_pointer_value().into(), current_step_val.into()], "current_step_print_call");
+        builder.build_unconditional_branch(after_switch);
+
+        builder.position_at_end(switch_odd_case);
+        let print_steps_format = builder.build_global_string_ptr("Remainder 1: %d\n", "print_current_step_format").unwrap();
+        builder.build_call(printf_fn, &[print_steps_format.as_pointer_value().into(), current_step_val.into()], "current_step_print_call");
+        builder.build_unconditional_branch(after_switch);
+
+        // Insert swicht statement in steps loop body
+        builder.position_at_end(steps_loop_body);
+        // print_call(builder, "Switch Default Case", "switch_default_print", printf_fn, , print_call_name);
+        builder.build_switch(current_step_nature, switch_default, &[
+            (i32_0, switch_even_case),
+            (i32_type.const_int(1, false), switch_odd_case)
+        ]);
+        // This will need an unconditional branch but let's see
+        // Switch at end is good
+        // builder.build_unconditional_branch()
+        builder.position_at_end(after_switch);
         let updated_current_step_val =  builder.build_int_add(current_step_val, i32_type.const_int(1, false), "current_step_increment").unwrap();
         builder.build_store(current_step_ptr, updated_current_step_val);
         builder.build_unconditional_branch(steps_loop);
