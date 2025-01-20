@@ -127,11 +127,15 @@ impl ToLlvmIr for ParseTree {
         let current_symbol_index_ptr = builder
             .build_alloca(i32_type, "current_symbol_index_ptr")
             .unwrap();
+        let current_state_index_ptr = builder
+            .build_alloca(i32_type, "current_state_index_ptr")
+            .unwrap();
         builder.build_store(index_ptr, i32_0);
         builder.build_store(current_step_ptr, i32_0);
 
         // TODO - Update it based on what the initial symbol is
         builder.build_store(current_symbol_index_ptr, i32_0);
+        builder.build_store(current_state_index_ptr, i32_0);
 
         let print_steps_format = builder
             .build_global_string_ptr("All Symbols: %s\n", "print_current_step_format")
@@ -145,8 +149,41 @@ impl ToLlvmIr for ParseTree {
             .collect::<Vec<String>>()
             .join(", ");
 
-        let symbol_index_value_mapping_ptr = builder.build_global_string_ptr(&symbol_index_value_mapping, "symbol_index_value_mapping").unwrap();
-        builder.build_call(printf_fn, &[print_steps_format.as_pointer_value().into(), symbol_index_value_mapping_ptr.as_pointer_value().into()], "print_all_symbols");
+        let symbol_index_value_mapping_ptr = builder
+            .build_global_string_ptr(&symbol_index_value_mapping, "symbol_index_value_mapping")
+            .unwrap();
+        builder.build_call(
+            printf_fn,
+            &[
+                print_steps_format.as_pointer_value().into(),
+                symbol_index_value_mapping_ptr.as_pointer_value().into(),
+            ],
+            "print_all_symbols",
+        );
+
+        let print_steps_format = builder
+            .build_global_string_ptr("All States: %s\n", "print_current_step_format")
+            .unwrap();
+
+        let state_index_value_mapping = self
+            .states
+            .iter()
+            .enumerate()
+            .map(|(i, s)| format!("{}:{}", i, s))
+            .collect::<Vec<String>>()
+            .join(", ");
+
+        let state_index_value_mapping_ptr = builder
+            .build_global_string_ptr(&state_index_value_mapping, "state_index_value_mapping")
+            .unwrap();
+        builder.build_call(
+            printf_fn,
+            &[
+                print_steps_format.as_pointer_value().into(),
+                state_index_value_mapping_ptr.as_pointer_value().into(),
+            ],
+            "print_all_states",
+        );
         builder.build_unconditional_branch(steps_loop);
 
         // Loop condition
@@ -163,6 +200,23 @@ impl ToLlvmIr for ParseTree {
             )
             .unwrap()
             .into_int_value();
+        let current_state_index = builder
+            .build_load(i32_type, current_state_index_ptr, "current_state_index_val")
+            .unwrap()
+            .into_int_value();
+        // current_symbol_index * total_states + current_state_index
+        let total_symbols = self.symbols.len();
+        let total_states = self.states.len();
+        let lhs = builder
+            .build_int_mul(
+                current_symbol_index,
+                i32_type.const_int(total_states.try_into().unwrap(), false),
+                "current_symbol_index__x__total_states",
+            )
+            .unwrap();
+        let current_switch_case_number = builder
+            .build_int_add(lhs, current_state_index, "current_switch_case_number")
+            .unwrap();
         let step_limit_cond = builder
             .build_int_compare(
                 IntPredicate::ULT,
@@ -196,13 +250,16 @@ impl ToLlvmIr for ParseTree {
         //     )
         //     .unwrap();
         // Later we will use the current state and current symbol value
-        let total_symbols = self.symbols.len();
         let switch_default = context.append_basic_block(main_fn, "switch_default");
         let after_switch = context.append_basic_block(main_fn, "after_switch");
         let mut case_switch_mapping = vec![];
         let print_steps_format = builder
-            .build_global_string_ptr("Symbol: %s\n", "print_current_step_format")
+            .build_global_string_ptr("Symbol: %s State: %s\n", "print_current_step_format")
             .unwrap();
+
+        let mut symbol_global_value_map: Vec<inkwell::values::GlobalValue> =
+            Vec::with_capacity(total_symbols);
+        // Can be improved as per clippy - but ignore
         for sym_index in 0..total_symbols {
             let symbol = builder
                 .build_global_string_ptr(
@@ -210,19 +267,53 @@ impl ToLlvmIr for ParseTree {
                     &format!("symbol_{}", self.symbols[sym_index]),
                 )
                 .unwrap();
-            let switch_case = context.append_basic_block(main_fn, &format!("switch_{}", sym_index));
+            // symbol_global_value_map[sym_index] = symbol;
+            symbol_global_value_map.push(symbol);
+        }
+
+        let mut state_global_value_map: Vec<inkwell::values::GlobalValue> =
+            Vec::with_capacity(total_states);
+        // Can be improved as per clippy - but ignore
+        for state_index in 0..total_states {
+            let state = builder
+                .build_global_string_ptr(
+                    &self.states[state_index],
+                    &format!("state_{}", self.states[state_index]),
+                )
+                .unwrap();
+            // state_global_value_map[state_index] = state;
+            state_global_value_map.push(state);
+        }
+
+        // We will cover all cases for all combination of symbols and states
+        // Total symbols = 5
+        // Total states = 6
+        // (sym_0, state_0): 0, (sym_0, state_1): 1, .... (sym_0, state_5): 5 : 1st row
+        // (sym_1, state_0): 6, (sym_1, state_1): 7, ..... - 2nd row
+        // ........
+        // ...................  (sym_4, state_5): 29(4*6 + 5) - last row
+        // General formula for case number = sym_index * total_states + state_index
+        for switch_case_number in 0..total_symbols * total_states {
+            // let switch_case_number = sym_index * total_states + state_index;
+            let sym_index = switch_case_number / total_states;
+            let state_index = switch_case_number % total_states;
+            let symbol = symbol_global_value_map[sym_index];
+            let state = state_global_value_map[state_index];
+            let switch_case = context
+                .append_basic_block(main_fn, &format!("sym_{}_state_{}", sym_index, state_index));
             builder.position_at_end(switch_case);
             builder.build_call(
                 printf_fn,
                 &[
                     print_steps_format.as_pointer_value().into(),
                     symbol.as_pointer_value().into(),
+                    state.as_pointer_value().into(),
                 ],
                 "current_step_print_call",
             );
             builder.build_unconditional_branch(after_switch);
             case_switch_mapping.push((
-                i32_type.const_int(sym_index.try_into().unwrap(), false),
+                i32_type.const_int(switch_case_number.try_into().unwrap(), false),
                 switch_case,
             ));
         }
@@ -275,7 +366,11 @@ impl ToLlvmIr for ParseTree {
         // Insert swicht statement in steps loop body
         builder.position_at_end(steps_loop_body);
         // print_call(builder, "Switch Default Case", "switch_default_print", printf_fn, , print_call_name);
-        builder.build_switch(current_symbol_index, switch_default, &case_switch_mapping);
+        builder.build_switch(
+            current_switch_case_number,
+            switch_default,
+            &case_switch_mapping,
+        );
 
         builder.position_at_end(after_switch);
         let updated_current_step_val = builder
@@ -309,6 +404,8 @@ impl ToLlvmIr for ParseTree {
             .unwrap();
 
         builder.build_store(current_symbol_index_ptr, updated_current_symbol_index);
+
+        // We will similarly update the state index later
         builder.build_unconditional_branch(steps_loop);
 
         // Loop end

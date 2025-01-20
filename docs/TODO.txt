@@ -1,3 +1,27 @@
+1/19
+Working LLVM IR:
+- A working loop with a switch statement inside it
+    - Runs for number of steps
+    - Switch statement is on current symbol index
+        - Being updated +2 in each loop
+
+
+Next steps:
+    - At each step of the loop
+        - Increment the index ptr(clipping it if it goes over array length)
+        - Store the current symbol index in array
+    - Print the array in the end
+
+    - The only thing that remains to be done is
+        - Update the symbol index based on condition
+            - Iterate over condition vector 
+            - Collect all of them in a single vector
+                - It will have (initial_state, current_symbol_requirement, updates(write, move left or right), final_state)
+                - this should be translated to (state_index, current_symbol_index,updates to array and its index- in symbol index format, next_state_index)
+
+
+
+
 1. Test with multiple state machines and verify the output.
 2. Read up about llvm, its rust bindings and try to generate the code in llvm IR.
 
