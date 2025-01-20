@@ -59,8 +59,6 @@ impl ToLlvmIr for ParseTree {
         let num_steps_ptr = builder.build_alloca(i32_type, "num_steps_ptr").unwrap();
         let arr_size_ptr = builder.build_alloca(i32_type, "arr_size_ptr").unwrap();
         let i32_0 = i32_type.const_int(0, false);
-        // builder.build_store(index_ptr, i32_0);
-        // builder.build_store(index_ptr, i32_type.const_int(0, false));
 
         // Prompt user for input (number of steps)
         let num_steps_prompt = builder
@@ -116,13 +114,16 @@ impl ToLlvmIr for ParseTree {
             .into_pointer_value();
 
         // Initialize tape with 'X'
+
         let steps_loop = context.append_basic_block(main_fn, "steps_loop");
         let steps_loop_body = context.append_basic_block(main_fn, "steps_loop_body");
         let steps_loop_end = context.append_basic_block(main_fn, "steps_loop_end");
         let main_return = context.append_basic_block(main_fn, "main_return");
 
         // Initialize loop counter
-        let index_ptr = builder.build_alloca(i32_type, "index_ptr").unwrap();
+        let current_tape_index_ptr = builder
+            .build_alloca(i32_type, "current_tape_index_ptr")
+            .unwrap();
         let current_step_ptr = builder.build_alloca(i32_type, "current_step_ptr").unwrap();
         let current_symbol_index_ptr = builder
             .build_alloca(i32_type, "current_symbol_index_ptr")
@@ -130,7 +131,7 @@ impl ToLlvmIr for ParseTree {
         let current_state_index_ptr = builder
             .build_alloca(i32_type, "current_state_index_ptr")
             .unwrap();
-        builder.build_store(index_ptr, i32_0);
+        builder.build_store(current_tape_index_ptr, i32_0);
         builder.build_store(current_step_ptr, i32_0);
 
         // TODO - Update it based on what the initial symbol is
@@ -299,8 +300,13 @@ impl ToLlvmIr for ParseTree {
             let state_index = switch_case_number % total_states;
             let symbol = symbol_global_value_map[sym_index];
             let state = state_global_value_map[state_index];
-            let switch_case = context
-                .append_basic_block(main_fn, &format!("sym_{}_state_{}", sym_index, state_index));
+            let switch_case = context.append_basic_block(
+                main_fn,
+                &format!(
+                    "state_{}_sym_{}",
+                    self.states[state_index], self.symbols[sym_index]
+                ),
+            );
             builder.position_at_end(switch_case);
             builder.build_call(
                 printf_fn,
@@ -318,8 +324,153 @@ impl ToLlvmIr for ParseTree {
             ));
         }
 
-        // let switch_even_case = context.append_basic_block(main_fn, "switch_0");
-        // let switch_odd_case = context.append_basic_block(main_fn, "switch_1");
+        // Updates to state and symbol index based on conditions
+        let state_to_index_map: HashMap<String, usize> = self
+            .states
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.clone(), i))
+            .collect();
+        let symbol_to_index_map: HashMap<String, usize> = self
+            .symbols
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.clone(), i))
+            .collect();
+
+        // For each initial state we will first collect
+        // [{condition, steps, final_state}] vector map
+        // Then we will process this to generate
+        // [{switch_case_number,steps, final_state}] vector map
+
+        let mut state_transition_map: HashMap<String, Vec<Transition>> = HashMap::new();
+        for transition in self.transitions.iter() {
+            let initial_state = &transition.initial_state;
+            let condition = &transition.condition;
+            let steps = &transition.steps;
+            let final_state = &transition.final_state;
+            state_transition_map
+                .entry(initial_state.clone())
+                .or_default()
+                .push(transition.clone());
+        }
+
+        // initial_state -> [{symbols, steps, final_state}]
+        let mut processed_state_transition_map: HashMap<
+            String,
+            Vec<(Vec<String>, Vec<TransitionStep>, String)>,
+        > = HashMap::new();
+
+        for (initial_state, transitions) in state_transition_map.iter_mut() {
+            let mut inserted_symbols = HashSet::new();
+            // Sort the transitions based on the condition so that we always process
+            // OR condition first
+            transitions.sort_by(|a, b| match (&a.condition, &b.condition) {
+                (Condition::Star, Condition::OR(_)) => std::cmp::Ordering::Greater,
+                (Condition::OR(_), Condition::Star) => std::cmp::Ordering::Less,
+                _ => std::cmp::Ordering::Equal,
+            });
+            for transition in transitions.iter() {
+                let final_state = transition.final_state.clone();
+                let steps = transition.steps.clone();
+                let mut symbols: Vec<String> = vec![];
+                match &transition.condition {
+                    Condition::OR(s) => {
+                        symbols = s.to_vec();
+                        inserted_symbols.extend(s);
+                    }
+                    Condition::Star => {
+                        // symbols = self.symbols.iter().cloned().collect();
+                        // Insert only those symbols which are not already inserted
+                        symbols = self
+                            .symbols
+                            .iter()
+                            .filter(|s| !inserted_symbols.contains(*s))
+                            .cloned()
+                            .collect();
+                    }
+                }
+                // processed_state_transition_map
+                //     .insert(initial_state.clone(), (symbols, steps, final_state.clone()));
+                processed_state_transition_map
+                    .entry(initial_state.clone())
+                    .or_default()
+                    .push((symbols, steps, final_state.clone()));
+            }
+        }
+
+        for (initial_state, transitions) in processed_state_transition_map.iter() {
+            for (matching_symbols, steps, final_state) in transitions {
+                // Switch case numbers for this transition
+                let switch_case_numbers = matching_symbols
+                    .iter()
+                    .map(|s| {
+                        let symbol_index = symbol_to_index_map[s];
+                        let state_index = state_to_index_map[initial_state];
+                        symbol_index * total_states + state_index
+                    })
+                    .collect::<Vec<usize>>();
+
+                for switch_case_number in switch_case_numbers {
+                    let (_, switch_case) = case_switch_mapping[switch_case_number];
+                    // builder.position_at_end(switch_case);
+
+                    // Position at the instruction just before the last instruction
+                    let unconditional_jump = switch_case.get_terminator().unwrap();
+                    builder.position_before(&unconditional_jump);
+                    for step in steps {
+                        match step {
+                            TransitionStep::L => {
+                                let mut current_tape_index_value = builder
+                                    .build_load(
+                                        i32_type,
+                                        current_tape_index_ptr,
+                                        "current_tape_index_val",
+                                    )
+                                    .unwrap()
+                                    .into_int_value();
+                                current_tape_index_value = builder
+                                    .build_int_sub(
+                                        current_tape_index_value,
+                                        i32_type.const_int(1, false),
+                                        "move_left",
+                                    )
+                                    .unwrap();
+                                builder
+                                    .build_store(current_tape_index_ptr, current_tape_index_value);
+                                // Move left
+                            }
+                            TransitionStep::R => {
+                                // Move right
+                                let mut current_tape_index_value = builder
+                                    .build_load(
+                                        i32_type,
+                                        current_tape_index_ptr,
+                                        "current_tape_index_val",
+                                    )
+                                    .unwrap()
+                                    .into_int_value();
+                                current_tape_index_value = builder
+                                    .build_int_add(
+                                        current_tape_index_value,
+                                        i32_type.const_int(1, false),
+                                        "move_right",
+                                    )
+                                    .unwrap();
+                                builder
+                                    .build_store(current_tape_index_ptr, current_tape_index_value);
+                            }
+                            TransitionStep::P(symbol) => {
+                                // TODO - Print symbol index in the current index
+                            }
+                            TransitionStep::X => {
+                                // Do nothing
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         builder.position_at_end(switch_default);
         let print_steps_format = builder
