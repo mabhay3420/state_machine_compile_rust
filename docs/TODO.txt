@@ -1,3 +1,21 @@
+1/20
+Switch statement with actual index movement logic
+ - Need to verify by priting the index value
+
+Next Steps:
+    - Print tape content
+        - Right now sym index only
+    - Implement printing symbol to tape logic
+        - Verify that things are actually getting written to the tape
+    - Implementing final state ( update to state_index_ptr logic )
+
+
+- state_index should be initialised based on intial_state specified
+- sym_index should be set based on what the current tape content is
+    - load tape_index_ptr
+    - get i32 value in tape array
+    - store that i32 value in sym_index_ptr
+
 1/19
 Working LLVM IR:
 - A working loop with a switch statement inside it
